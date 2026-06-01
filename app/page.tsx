@@ -24,6 +24,7 @@ import {
   BarChart3,
   ShoppingBag,
   CloudSun,
+  Loader2,
 } from "lucide-react"
 
 import Dashboard from "@/components/dashboard"
@@ -36,6 +37,9 @@ import ServiceManagement from "@/components/service-management"
 import RegionalAdaptation from "@/components/regional-adaptation"
 import LanguageManager from "@/components/language-manager"
 import GeolocationManager from "@/components/geolocation-manager"
+
+// 👇 IMPORTANT: Importer le contexte Pi
+import { PiAuthProvider, usePiAuth } from "@/contexts/pi-auth-context"
 
 // Données statiques pour la démo (à remplacer par API)
 const worldCountries = [
@@ -72,14 +76,23 @@ const mainNavigation = [
   { id: "alerts", label: "Alertes", icon: Bell },
 ]
 
-export default function AgroMulticenterApp() {
+// 📌 Ce composant contient TOUTE la logique de l'application
+function AgroMulticenterAppContent() {
+  // 👇 Utilisation du hook Pi Auth (remplace isLoggedIn)
+  const { 
+    isAuthenticated, 
+    isLoading, 
+    login, 
+    logout, 
+    userData, 
+    error: piError 
+  } = usePiAuth()
+
   const [activeTab, setActiveTab] = useState("home")
   const [currentLanguage, setCurrentLanguage] = useState("fr")
   const [userRegion, setUserRegion] = useState("Burkina Faso")
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showRegistration, setShowRegistration] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(true)
-  const [userName, setUserName] = useState("Agriculteur")
   const [currentWeather, setCurrentWeather] = useState({ temp: "32°C", condition: "Ensoleillé" })
 
   const [registrationData, setRegistrationData] = useState({
@@ -91,24 +104,31 @@ export default function AgroMulticenterApp() {
 
   // Simulation météo (à remplacer par API réelle)
   useEffect(() => {
-    // Ici vous appellerez votre API météo
     setCurrentWeather({ temp: "32°C", condition: "Ensoleillé" })
   }, [userRegion])
 
   const handleRegistration = () => {
     console.log("Inscription:", registrationData)
-    setUserName(registrationData.firstName || "Agriculteur")
-    setIsLoggedIn(true)
     setShowRegistration(false)
     setUserRegion(registrationData.country || "Burkina Faso")
+    // Note: L'inscription devrait aussi créer un compte sur votre backend
   }
 
-  const handleLogout = () => {
-    setIsLoggedIn(false)
-    setUserName("")
+  // 🔄 Écran de chargement (pendant que Pi SDK se charge)
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-green-600 mx-auto mb-4" />
+          <p className="text-gray-600">Chargement de Pi Network...</p>
+          <p className="text-sm text-gray-400 mt-2">Veuillez patienter</p>
+        </div>
+      </div>
+    )
   }
 
-  if (!isLoggedIn) {
+  // 🔐 Écran de connexion (si non authentifié)
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl border-0">
@@ -120,16 +140,32 @@ export default function AgroMulticenterApp() {
             <p className="text-gray-600 mt-1">Plateforme agricole connectée</p>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setIsLoggedIn(true)}>
+            {/* Affichage des erreurs Pi */}
+            {piError && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
+                ⚠️ {piError}
+              </div>
+            )}
+            
+            {/* 👇 Bouton de connexion Pi Network */}
+            <Button 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+              onClick={login}
+            >
               🔓 Se connecter avec Pi Network
             </Button>
-            <Button variant="outline" className="w-full border-green-500 text-green-600 hover:bg-green-50" onClick={() => setShowRegistration(true)}>
+            
+            <Button 
+              variant="outline" 
+              className="w-full border-green-500 text-green-600 hover:bg-green-50" 
+              onClick={() => setShowRegistration(true)}
+            >
               ✨ Créer un compte gratuit
             </Button>
           </CardContent>
         </Card>
 
-        {/* Dialog d'inscription amélioré */}
+        {/* Dialog d'inscription (inchangé) */}
         <Dialog open={showRegistration} onOpenChange={setShowRegistration}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl">
             <DialogHeader>
@@ -137,7 +173,6 @@ export default function AgroMulticenterApp() {
               <p className="text-sm text-gray-500">Remplissez ces informations pour commencer</p>
             </DialogHeader>
             <div className="space-y-5">
-              {/* Nom et prénom */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="firstName">Prénom *</Label>
@@ -155,7 +190,6 @@ export default function AgroMulticenterApp() {
                 </div>
               </div>
 
-              {/* Email et téléphone */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="email">Email</Label>
@@ -173,7 +207,6 @@ export default function AgroMulticenterApp() {
                 </div>
               </div>
 
-              {/* Pays et géolocalisation */}
               <div>
                 <Label htmlFor="country">Pays *</Label>
                 <Select value={registrationData.country} onValueChange={(value) => setRegistrationData({ ...registrationData, country: value })}>
@@ -190,7 +223,6 @@ export default function AgroMulticenterApp() {
                 </Select>
               </div>
 
-              {/* Géolocalisation */}
               <div className="bg-blue-50 p-4 rounded-lg">
                 <Label className="text-blue-800 font-medium">📍 Géolocalisation (fortement recommandée)</Label>
                 <Button
@@ -216,7 +248,6 @@ export default function AgroMulticenterApp() {
                 <p className="text-xs text-blue-600">✓ Connexion avec des agriculteurs proches</p>
               </div>
 
-              {/* Ville et région */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="region">Région</Label>
@@ -234,7 +265,6 @@ export default function AgroMulticenterApp() {
                 </div>
               </div>
 
-              {/* Profession */}
               <div>
                 <Label htmlFor="profession">Profession *</Label>
                 <Select value={registrationData.profession} onValueChange={(value) => setRegistrationData({ ...registrationData, profession: value })}>
@@ -249,7 +279,6 @@ export default function AgroMulticenterApp() {
                 </Select>
               </div>
 
-              {/* Spécialités */}
               <div>
                 <Label>Spécialités (plusieurs choix possibles)</Label>
                 <div className="grid grid-cols-2 gap-2 mt-2">
@@ -270,7 +299,6 @@ export default function AgroMulticenterApp() {
                 </div>
               </div>
 
-              {/* Pi Wallet */}
               <div>
                 <Label htmlFor="piWallet">Adresse Portefeuille Pi Network (optionnel)</Label>
                 <Input id="piWallet" placeholder="GABC123..."
@@ -289,6 +317,7 @@ export default function AgroMulticenterApp() {
     )
   }
 
+  // ✅ Application principale (quand l'utilisateur est connecté)
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header mobile simplifié */}
@@ -378,7 +407,9 @@ export default function AgroMulticenterApp() {
                     return false
                   })?.label || "Accueil"}
                 </h2>
-                <p className="text-gray-500">Bonjour {userName} 👋</p>
+                <p className="text-gray-500">
+                  Bonjour {userData?.username || "Agriculteur"} 👋
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <Button variant="outline" size="sm" className="gap-2">
@@ -390,20 +421,21 @@ export default function AgroMulticenterApp() {
                   <span className="hidden sm:inline">Rechercher</span>
                 </Button>
                 <LanguageManager currentLanguage={currentLanguage} onLanguageChange={setCurrentLanguage} />
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-red-500 hover:text-red-600">
+                {/* 👇 Bouton déconnexion avec Pi logout */}
+                <Button variant="ghost" size="sm" onClick={logout} className="text-red-500 hover:text-red-600">
                   Déconnexion
                 </Button>
               </div>
             </div>
 
-            {/* Contenu des onglets */}
+            {/* Contenu des onglets (inchangé) */}
             <div className="space-y-6">
               {/* Accueil */}
               {(activeTab === "home") && (
                 <Dashboard currentLanguage={currentLanguage} userRegion={userRegion} onTabChange={setActiveTab} />
               )}
 
-              {/* Marketplace (regroupe Aviculture + Services) */}
+              {/* Marketplace */}
               {(activeTab === "marketplace") && (
                 <div className="space-y-6">
                   <AvicultureManagement currentLanguage={currentLanguage} userRegion={userRegion} />
@@ -411,7 +443,7 @@ export default function AgroMulticenterApp() {
                 </div>
               )}
 
-              {/* Réseau (Messages, Régions, Géolocalisation) */}
+              {/* Réseau */}
               {(activeTab === "network") && (
                 <div className="space-y-6">
                   <MessagingSystem currentLanguage={currentLanguage} userRegion={userRegion} />
@@ -422,7 +454,7 @@ export default function AgroMulticenterApp() {
                 </div>
               )}
 
-              {/* Mon espace (Profil, Portefeuille, Paramètres) */}
+              {/* Mon espace */}
               {(activeTab === "space") && (
                 <div className="space-y-6">
                   <UserProfile currentLanguage={currentLanguage} userRegion={userRegion} />
@@ -458,7 +490,7 @@ export default function AgroMulticenterApp() {
                 </div>
               )}
 
-              {/* Alertes et Analyses */}
+              {/* Alertes */}
               {(activeTab === "alerts") && (
                 <div className="space-y-6">
                   <Card className="border-l-4 border-l-orange-400">
@@ -490,7 +522,7 @@ export default function AgroMulticenterApp() {
                 </div>
               )}
 
-              {/* Compatibilité avec anciens onglets (si appelés directement) */}
+              {/* Compatibilité avec anciens onglets */}
               {activeTab === "aviculture" && <AvicultureManagement currentLanguage={currentLanguage} userRegion={userRegion} />}
               {activeTab === "services" && <ServiceManagement currentLanguage={currentLanguage} userRegion={userRegion} />}
               {activeTab === "messages" && <MessagingSystem currentLanguage={currentLanguage} userRegion={userRegion} />}
@@ -521,5 +553,14 @@ export default function AgroMulticenterApp() {
       {/* Navigation mobile en bas */}
       <MobileNavigation activeTab={activeTab} onTabChange={setActiveTab} onMenuToggle={() => setIsMenuOpen(!isMenuOpen)} />
     </div>
+  )
+}
+
+// 📌 LE COMPOSANT PRINCIPAL - ENVELOPPE TOUT AVEC PiAuthProvider
+export default function AgroMulticenterApp() {
+  return (
+    <PiAuthProvider>
+      <AgroMulticenterAppContent />
+    </PiAuthProvider>
   )
 }
