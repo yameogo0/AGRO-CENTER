@@ -146,10 +146,14 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
  */
 export const getUrlParams = (url: string): Record<string, string> => {
   const params: Record<string, string> = {}
-  const urlObj = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
-  urlObj.searchParams.forEach((value, key) => {
-    params[key] = value
-  })
+  try {
+    const urlObj = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+    urlObj.searchParams.forEach((value, key) => {
+      params[key] = value
+    })
+  } catch (error) {
+    console.error('Failed to parse URL:', error)
+  }
   return params
 }
 
@@ -274,7 +278,8 @@ export const stringToColor = (str: string): string => {
   let color = '#'
   for (let i = 0; i < 3; i++) {
     const value = (hash >> (i * 8)) & 0xFF
-    color += ('00' + value.toString(16)).substr(-2)
+    // Correction : utiliser slice() au lieu de substr() (obsolète)
+    color += ('00' + value.toString(16)).slice(-2)
   }
   return color
 }
@@ -317,6 +322,49 @@ export const sortBy = <T>(
   })
 }
 
+/**
+ * Attend un certain temps (Promise sleep)
+ * @param ms - Durée en millisecondes
+ * @returns Promise
+ */
+export const sleep = (ms: number): Promise<void> => {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Retourne une valeur dans une plage
+ * @param value - Valeur à clamp
+ * @param min - Minimum
+ * @param max - Maximum
+ * @returns Valeur clampée
+ */
+export const clamp = (value: number, min: number, max: number): number => {
+  return Math.min(Math.max(value, min), max)
+}
+
+/**
+ * Formate un nombre en pourcentage
+ * @param value - Valeur (ex: 0.75)
+ * @param locale - Locale (par défaut: 'fr-FR')
+ * @returns Pourcentage formaté
+ */
+export const formatPercentage = (value: number, locale: string = 'fr-FR'): string => {
+  return new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+/**
+ * Vérifie si une chaîne est vide ou null
+ * @param str - Chaîne à vérifier
+ * @returns true si vide
+ */
+export const isEmpty = (str: string | null | undefined): boolean => {
+  return !str || str.trim().length === 0
+}
+
 // Export par défaut
 export default {
   cn,
@@ -340,4 +388,8 @@ export default {
   stringToColor,
   groupBy,
   sortBy,
+  sleep,
+  clamp,
+  formatPercentage,
+  isEmpty,
 }
