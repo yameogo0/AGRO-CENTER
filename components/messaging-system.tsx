@@ -41,7 +41,12 @@ import {
   Download,
   Share2,
   ExternalLink,
+  X,
 } from "lucide-react"
+import { useDebounce } from "@/hooks/use-debounce"
+import { useClickOutside } from "@/hooks/use-click-outside"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useOnlineStatus } from "@/hooks/use-online-status"
 
 interface Message {
   id: string
@@ -88,7 +93,7 @@ interface MessagingSystemProps {
   userRegion: string
 }
 
-// Traductions
+// Traductions (identiques à l'original)
 const translations = {
   fr: {
     messages: "Messages",
@@ -126,6 +131,11 @@ const translations = {
     pending: "En attente",
     completed: "Complété",
     failed: "Échoué",
+    noMessages: "Aucun message",
+    typeFirstMessage: "Soyez le premier à envoyer un message",
+    onlineNow: "En ligne maintenant",
+    activeNow: "Actif maintenant",
+    yesterday: "Hier",
   },
   en: {
     messages: "Messages",
@@ -163,6 +173,11 @@ const translations = {
     pending: "Pending",
     completed: "Completed",
     failed: "Failed",
+    noMessages: "No messages",
+    typeFirstMessage: "Be the first to send a message",
+    onlineNow: "Online now",
+    activeNow: "Active now",
+    yesterday: "Yesterday",
   },
   es: {
     messages: "Mensajes",
@@ -200,6 +215,11 @@ const translations = {
     pending: "Pendiente",
     completed: "Completado",
     failed: "Fallido",
+    noMessages: "Sin mensajes",
+    typeFirstMessage: "Sé el primero en enviar un mensaje",
+    onlineNow: "En línea ahora",
+    activeNow: "Activo ahora",
+    yesterday: "Ayer",
   },
   pt: {
     messages: "Mensagens",
@@ -237,6 +257,11 @@ const translations = {
     pending: "Pendente",
     completed: "Concluído",
     failed: "Falhou",
+    noMessages: "Sem mensagens",
+    typeFirstMessage: "Seja o primeiro a enviar uma mensagem",
+    onlineNow: "Online agora",
+    activeNow: "Ativo agora",
+    yesterday: "Ontem",
   },
 }
 
@@ -252,11 +277,24 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [language, setLanguage] = useState(currentLanguage)
+  const [isTyping, setIsTyping] = useState(false)
+
+  // Hooks personnalisés
+  const debouncedSearch = useDebounce(searchQuery, 300)
+  const isOnline = useOnlineStatus()
+  const [pinnedConversations, setPinnedConversations] = useLocalStorage<string[]>("pinnedConversations", [])
+  const [archivedConversations, setArchivedConversations] = useLocalStorage<string[]>("archivedConversations", [])
+  const [draftMessages, setDraftMessages] = useLocalStorage<Record<string, string>>("draftMessages", {})
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const messageActionsRef = useRef<HTMLDivElement>(null)
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const t = translations[language as keyof typeof translations] || translations.fr
+
+  // Gestion du clic en dehors du menu d'actions
+  useClickOutside(messageActionsRef, () => setShowMessageActions(null))
 
   const conversations: Conversation[] = [
     {
@@ -282,8 +320,8 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
         type: "text",
       },
       unreadCount: 2,
-      pinned: true,
-      archived: false,
+      pinned: pinnedConversations.includes("conv1"),
+      archived: archivedConversations.includes("conv1"),
     },
     {
       id: "conv2",
@@ -309,8 +347,8 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
         type: "text",
       },
       unreadCount: 0,
-      pinned: false,
-      archived: false,
+      pinned: pinnedConversations.includes("conv2"),
+      archived: archivedConversations.includes("conv2"),
     },
     {
       id: "conv3",
@@ -335,8 +373,8 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
         type: "text",
       },
       unreadCount: 1,
-      pinned: false,
-      archived: false,
+      pinned: pinnedConversations.includes("conv3"),
+      archived: archivedConversations.includes("conv3"),
     },
     {
       id: "conv4",
@@ -357,8 +395,8 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
         type: "text",
       },
       unreadCount: 0,
-      pinned: false,
-      archived: false,
+      pinned: pinnedConversations.includes("conv4"),
+      archived: archivedConversations.includes("conv4"),
       isGroup: true,
       groupName: "Groupe Aviculture BF",
       groupAvatar: "🐔",
@@ -432,6 +470,40 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  // Sauvegarder le brouillon du message
+  useEffect(() => {
+    if (activeConversation) {
+      if (newMessage.trim()) {
+        setDraftMessages({ ...draftMessages, [activeConversation]: newMessage })
+      } else {
+        const { [activeConversation]: _, ...rest } = draftMessages
+        setDraftMessages(rest)
+      }
+    }
+  }, [newMessage, activeConversation])
+
+  // Charger le brouillon sauvegardé
+  useEffect(() => {
+    if (activeConversation && draftMessages[activeConversation]) {
+      setNewMessage(draftMessages[activeConversation])
+    } else if (activeConversation && !draftMessages[activeConversation]) {
+      setNewMessage("")
+    }
+  }, [activeConversation])
+
+  // Simuler l'indicateur de frappe
+  useEffect(() => {
+    if (newMessage.trim() && !isTyping) {
+      setIsTyping(true)
+      // Simuler que l'autre personne est en train d'écrire
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 2000)
+    }
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+    }
+  }, [newMessage])
+
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp)
     const now = new Date()
@@ -441,7 +513,7 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
     if (diffHours < 24) {
       return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     } else if (diffHours < 48) {
-      return "Hier"
+      return t.yesterday
     }
     return date.toLocaleDateString()
   }
@@ -513,9 +585,33 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
     setShowMessageActions(null)
   }
 
+  const handlePinConversation = (convId: string) => {
+    if (pinnedConversations.includes(convId)) {
+      setPinnedConversations(pinnedConversations.filter(id => id !== convId))
+    } else {
+      setPinnedConversations([...pinnedConversations, convId])
+    }
+  }
+
+  const handleArchiveConversation = (convId: string) => {
+    if (archivedConversations.includes(convId)) {
+      setArchivedConversations(archivedConversations.filter(id => id !== convId))
+    } else {
+      setArchivedConversations([...archivedConversations, convId])
+    }
+  }
+
+  // Filtrer les conversations avec recherche debounced
   const filteredConversations = conversations.filter(conv => {
     const name = conv.isGroup ? conv.groupName : conv.participants[0].name
-    return name?.toLowerCase().includes(searchQuery.toLowerCase())
+    return name?.toLowerCase().includes(debouncedSearch.toLowerCase())
+  })
+
+  // Trier les conversations (épinglées en premier)
+  const sortedConversations = [...filteredConversations].sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1
+    if (!a.pinned && b.pinned) return 1
+    return 0
   })
 
   const activeConvData = conversations.find(c => c.id === activeConversation)
@@ -529,6 +625,11 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-green-600" />
               {t.messages}
+              {!isOnline && (
+                <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-300">
+                  Hors ligne
+                </Badge>
+              )}
             </h2>
             <div className="flex gap-1">
               <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
@@ -553,57 +654,127 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
           </TabsList>
 
           <TabsContent value="messages" className="flex-1 overflow-y-auto">
-            <div className="space-y-1 p-2">
-              {filteredConversations.map((conv) => (
-                <div key={conv.id} className={`p-3 rounded-lg cursor-pointer transition-all ${activeConversation === conv.id ? "bg-green-50 border border-green-200 shadow-sm" : "hover:bg-gray-100"}`} onClick={() => setActiveConversation(conv.id)}>
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center text-2xl">
-                        {conv.isGroup ? conv.groupAvatar : conv.participants[0].avatar}
+            {sortedConversations.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Aucune conversation</p>
+              </div>
+            ) : (
+              <div className="space-y-1 p-2">
+                {sortedConversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={`p-3 rounded-lg cursor-pointer transition-all relative group ${
+                      activeConversation === conv.id ? "bg-green-50 border border-green-200 shadow-sm" : "hover:bg-gray-100"
+                    }`}
+                    onClick={() => setActiveConversation(conv.id)}
+                  >
+                    {conv.pinned && (
+                      <div className="absolute top-2 right-2">
+                        <Pin className="h-3 w-3 text-gray-400" />
                       </div>
-                      {!conv.isGroup && conv.participants[0].online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium truncate">{conv.isGroup ? conv.groupName : conv.participants[0].name}</p>
-                        <span className="text-xs text-gray-400">{formatTime(conv.lastMessage.timestamp)}</span>
-                      </div>
-                      <p className="text-xs text-gray-500 truncate">{conv.lastMessage.senderId === "current" ? "Vous: " : ""}{conv.lastMessage.content.substring(0, 40)}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        {!conv.isGroup && conv.participants[0].rating && (
-                          <div className="flex items-center gap-0.5"><Star className="h-3 w-3 text-yellow-400 fill-current" /><span className="text-xs">{conv.participants[0].rating}</span></div>
+                    )}
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center text-2xl">
+                          {conv.isGroup ? conv.groupAvatar : conv.participants[0].avatar}
+                        </div>
+                        {!conv.isGroup && conv.participants[0].online && (
+                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                         )}
-                        {conv.unreadCount > 0 && <Badge className="bg-green-600 text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center px-1">{conv.unreadCount}</Badge>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium truncate">{conv.isGroup ? conv.groupName : conv.participants[0].name}</p>
+                          <span className="text-xs text-gray-400">{formatTime(conv.lastMessage.timestamp)}</span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">
+                          {conv.lastMessage.senderId === "current" ? "Vous: " : ""}
+                          {conv.lastMessage.content.substring(0, 40)}
+                        </p>
+                        <div className="flex items-center justify-between mt-1">
+                          {!conv.isGroup && conv.participants[0].rating && (
+                            <div className="flex items-center gap-0.5">
+                              <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                              <span className="text-xs">{conv.participants[0].rating}</span>
+                            </div>
+                          )}
+                          {conv.unreadCount > 0 && (
+                            <Badge className="bg-green-600 text-white text-xs h-5 min-w-5 rounded-full flex items-center justify-center px-1">
+                              {conv.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Menu contextuel */}
+                    <div className="absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={(e) => { e.stopPropagation(); handlePinConversation(conv.id) }}
+                        >
+                          <Pin className={`h-3 w-3 ${conv.pinned ? "text-yellow-500 fill-current" : "text-gray-400"}`} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          onClick={(e) => { e.stopPropagation(); handleArchiveConversation(conv.id) }}
+                        >
+                          <Archive className={`h-3 w-3 ${conv.archived ? "text-blue-500" : "text-gray-400"}`} />
+                        </Button>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="discover" className="flex-1 overflow-y-auto p-4 space-y-3">
-            <div className="flex items-center justify-between"><h3 className="font-medium text-sm">{t.suggestedUsers}</h3><Button variant="ghost" size="sm" className="gap-1"><Filter className="h-3 w-3" />{t.filter}</Button></div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-sm">{t.suggestedUsers}</h3>
+              <Button variant="ghost" size="sm" className="gap-1"><Filter className="h-3 w-3" />{t.filter}</Button>
+            </div>
             {suggestedUsers.map((user) => (
               <div key={user.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border hover:shadow-md transition-all">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center text-xl">{user.avatar}</div>
+                <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center text-xl">
+                  {user.avatar}
+                </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{user.name}</p>
                   <p className="text-xs text-gray-500">{user.specialty}</p>
-                  <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5"><Star className="h-3 w-3 text-yellow-400 fill-current" /><span>{user.rating}</span><span>•</span><span>{user.mutual} {t.mutualConnections}</span></div>
+                  <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                    <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                    <span>{user.rating}</span>
+                    <span>•</span>
+                    <span>{user.mutual} {t.mutualConnections}</span>
+                  </div>
                 </div>
-                <Button size="sm" variant="outline" className="gap-1"><MessageSquare className="h-3 w-3" />{t.message}</Button>
+                <Button size="sm" variant="outline" className="gap-1">
+                  <MessageSquare className="h-3 w-3" />
+                  {t.message}
+                </Button>
               </div>
             ))}
           </TabsContent>
 
           <TabsContent value="groups" className="flex-1 overflow-y-auto p-4 space-y-3">
-            <div className="flex items-center justify-between"><h3 className="font-medium text-sm">{t.availableGroups}</h3><Button size="sm" variant="outline" className="gap-1"><UserPlus className="h-3 w-3" />{t.create}</Button></div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-medium text-sm">{t.availableGroups}</h3>
+              <Button size="sm" variant="outline" className="gap-1"><UserPlus className="h-3 w-3" />{t.create}</Button>
+            </div>
             {groups.map((group, idx) => (
               <div key={idx} className="p-3 bg-white rounded-lg border hover:shadow-md transition-all">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-xl">{group.avatar}</div>
-                  <div className="flex-1"><p className="font-medium text-sm">{group.name}</p><p className="text-xs text-gray-500">{group.members} {t.members}</p></div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{group.name}</p>
+                    <p className="text-xs text-gray-500">{group.members} {t.members}</p>
+                  </div>
                   <Button size="sm" className="bg-green-600 hover:bg-green-700">{t.join}</Button>
                 </div>
                 <p className="text-xs text-gray-500 ml-13">{group.description}</p>
@@ -623,13 +794,26 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
                   <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-blue-100 rounded-full flex items-center justify-center text-xl">
                     {activeConvData?.isGroup ? activeConvData.groupAvatar : activeConvData?.participants[0].avatar}
                   </div>
-                  {!activeConvData?.isGroup && activeConvData?.participants[0].online && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>}
+                  {!activeConvData?.isGroup && activeConvData?.participants[0].online && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                  )}
                 </div>
                 <div>
-                  <p className="font-medium">{activeConvData?.isGroup ? activeConvData.groupName : activeConvData?.participants[0].name}</p>
+                  <p className="font-medium">
+                    {activeConvData?.isGroup ? activeConvData.groupName : activeConvData?.participants[0].name}
+                  </p>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
-                    {activeConvData?.participants[0].online ? <><Circle className="h-2 w-2 text-green-500 fill-green-500" />{t.online}</> : <><Clock className="h-2 w-2" />{t.seen} {formatTime(activeConvData?.participants[0].lastSeen || "")}</>}
+                    {activeConvData?.participants[0].online ? (
+                      <><Circle className="h-2 w-2 text-green-500 fill-green-500" />{t.onlineNow}</>
+                    ) : (
+                      <><Clock className="h-2 w-2" />{activeConvData?.participants[0].lastSeen ? `${t.seen} ${formatTime(activeConvData.participants[0].lastSeen)}` : t.offline}</>
+                    )}
                     {activeConvData?.participants[0].verified && <Badge variant="outline" className="text-xs bg-blue-50">✓ Vérifié</Badge>}
+                    {isTyping && (
+                      <Badge variant="outline" className="text-xs bg-green-50 text-green-600 animate-pulse">
+                        En train d'écrire...
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -642,71 +826,136 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((message, idx) => (
-                <div key={message.id} className={`flex ${message.senderId === "current" ? "justify-end" : "justify-start"} group`}>
-                  <div className="relative max-w-[70%]">
-                    <div className={`px-4 py-2 rounded-2xl ${message.senderId === "current" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-900"}`}>
-                      {message.replyTo && (
-                        <div className={`text-xs p-2 rounded mb-1 ${message.senderId === "current" ? "bg-green-700" : "bg-gray-200"}`}>
-                          <p className="font-medium">↳ {message.replyTo.senderName}</p>
-                          <p className="truncate">{message.replyTo.content.substring(0, 60)}</p>
-                        </div>
-                      )}
-                      {message.type === "text" && <p className="text-sm">{message.content}</p>}
-                      {message.type === "payment" && (
-                        <div className={`flex items-center gap-2 p-2 rounded-lg ${message.senderId === "current" ? "bg-green-700" : "bg-white border"}`}>
-                          <Pi className="h-5 w-5 text-purple-500" />
-                          <div>
-                            <p className="text-sm font-medium">{message.amount} π</p>
-                            <p className="text-xs opacity-75">{message.content}</p>
+              {messages.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">{t.noMessages}</p>
+                  <p className="text-xs">{t.typeFirstMessage}</p>
+                </div>
+              ) : (
+                messages.map((message) => (
+                  <div key={message.id} className={`flex ${message.senderId === "current" ? "justify-end" : "justify-start"} group`}>
+                    <div className="relative max-w-[70%]">
+                      <div className={`px-4 py-2 rounded-2xl ${message.senderId === "current" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-900"}`}>
+                        {message.replyTo && (
+                          <div className={`text-xs p-2 rounded mb-1 ${message.senderId === "current" ? "bg-green-700" : "bg-gray-200"}`}>
+                            <p className="font-medium">↳ {message.replyTo.senderName}</p>
+                            <p className="truncate">{message.replyTo.content.substring(0, 60)}</p>
                           </div>
-                          {message.paymentStatus === "pending" && <Badge className="bg-yellow-500 text-white text-xs ml-2">En attente</Badge>}
-                          {message.paymentStatus === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500 ml-2" />}
-                        </div>
-                      )}
-                      <div className="flex items-center justify-end gap-2 mt-1">
-                        <span className={`text-xs ${message.senderId === "current" ? "text-green-200" : "text-gray-400"}`}>{formatTime(message.timestamp)}</span>
-                        {message.senderId === "current" && (
-                          message.delivered ? <CheckCircle2 className="h-3 w-3 text-green-200" /> : <Clock className="h-3 w-3 text-green-200" />
                         )}
+                        {message.type === "text" && <p className="text-sm">{message.content}</p>}
+                        {message.type === "payment" && (
+                          <div className={`flex items-center gap-2 p-2 rounded-lg ${message.senderId === "current" ? "bg-green-700" : "bg-white border"}`}>
+                            <Pi className="h-5 w-5 text-purple-500" />
+                            <div>
+                              <p className="text-sm font-medium">{message.amount} π</p>
+                              <p className="text-xs opacity-75">{message.content}</p>
+                            </div>
+                            {message.paymentStatus === "pending" && <Badge className="bg-yellow-500 text-white text-xs ml-2">En attente</Badge>}
+                            {message.paymentStatus === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500 ml-2" />}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-end gap-2 mt-1">
+                          <span className={`text-xs ${message.senderId === "current" ? "text-green-200" : "text-gray-400"}`}>
+                            {formatTime(message.timestamp)}
+                          </span>
+                          {message.senderId === "current" && (
+                            message.delivered ? (
+                              <CheckCircle2 className="h-3 w-3 text-green-200" />
+                            ) : (
+                              <Clock className="h-3 w-3 text-green-200" />
+                            )
+                          )}
+                        </div>
+                      </div>
+                      {/* Menu d'actions au survol */}
+                      <div className={`absolute top-0 ${message.senderId === "current" ? "-left-8" : "-right-8"} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1`}>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setReplyToMessage(message)}>
+                          <Reply className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleCopyMessage(message.content)}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => handleDeleteMessage(message.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
-                    <div className={`absolute top-0 ${message.senderId === "current" ? "-left-8" : "-right-8"} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1`}>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setReplyToMessage(message)}><Reply className="h-3 w-3" /></Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleCopyMessage(message.content)}><Copy className="h-3 w-3" /></Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleDeleteMessage(message.id)}><Trash2 className="h-3 w-3" /></Button>
-                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
               {replyToMessage && (
-                <div className="fixed bottom-20 right-4 left-80 bg-gray-100 rounded-lg p-2 mx-4 flex items-center justify-between">
-                  <div className="flex-1"><p className="text-xs text-gray-500">Réplying à {replyToMessage.senderName}</p><p className="text-sm truncate">{replyToMessage.content}</p></div>
-                  <Button size="sm" variant="ghost" onClick={() => setReplyToMessage(null)}><X className="h-4 w-4" /></Button>
+                <div className="sticky bottom-0 bg-gray-100 rounded-lg p-2 mb-2 flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Réponse à {replyToMessage.senderName}</p>
+                    <p className="text-sm truncate">{replyToMessage.content}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setReplyToMessage(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Zone de saisie */}
             <div className="p-4 border-t bg-white">
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleFileUpload}><Paperclip className="h-4 w-4" /></Button>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0"><ImageIcon className="h-4 w-4" /></Button>
-                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsRecording(!isRecording)}>{isRecording ? <VolumeX className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}</Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleFileUpload}>
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsRecording(!isRecording)}>
+                  {isRecording ? <VolumeX className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4" />}
+                </Button>
                 <div className="flex-1 relative">
-                  <Input placeholder={t.typeMessage} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => e.key === "Enter" && handleSendMessage()} className="pr-24" />
-                  <Button size="sm" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2 h-6 px-2 text-xs" onClick={() => handleSendPayment(activeConvData?.participants[0].id || "", activeConvData?.participants[0].name || "")}>
+                  <Input
+                    placeholder={t.typeMessage}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                    className="pr-24"
+                    disabled={!isOnline}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 px-2 text-xs"
+                    onClick={() => handleSendPayment(activeConvData?.participants[0].id || "", activeConvData?.participants[0].name || "")}
+                    disabled={!isOnline}
+                  >
                     <Pi className="h-3 w-3 mr-1" />π
                   </Button>
                 </div>
-                <Button size="sm" onClick={handleSendMessage} disabled={!newMessage.trim()} className="bg-green-600 hover:bg-green-700"><Send className="h-4 w-4" /></Button>
+                <Button
+                  size="sm"
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim() || !isOnline}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
               </div>
+              {!isOnline && (
+                <p className="text-xs text-red-500 mt-2 text-center">
+                  ⚠️ Vous êtes hors ligne. Les messages seront envoyés quand la connexion sera rétablie.
+                </p>
+              )}
               <input type="file" ref={fileInputRef} className="hidden" />
             </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
-            <div className="text-center"><MessageSquare className="h-16 w-16 mx-auto mb-4 text-gray-300" /><p className="text-lg font-medium">{t.selectConversation}</p><p className="text-sm text-gray-400">{t.selectConversationDesc}</p><Button className="mt-4 bg-green-600 hover:bg-green-700" onClick={() => setActiveTab("discover")}>{t.discoverUsers}</Button></div>
+            <div className="text-center">
+              <MessageSquare className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-lg font-medium">{t.selectConversation}</p>
+              <p className="text-sm text-gray-400">{t.selectConversationDesc}</p>
+              <Button className="mt-4 bg-green-600 hover:bg-green-700" onClick={() => setActiveTab("discover")}>
+                {t.discoverUsers}
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -715,10 +964,37 @@ export default function MessagingSystem({ currentLanguage, userRegion }: Messagi
       {showPaymentModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-semibold flex items-center gap-2"><Wallet className="h-5 w-5 text-purple-600" />{t.paymentRequest}</h3><button onClick={() => setShowPaymentModal(false)} className="text-gray-500">✕</button></div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-purple-600" />
+                {t.paymentRequest}
+              </h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-gray-500">✕</button>
+            </div>
             <p className="text-gray-600 mb-4">Envoyer à: <span className="font-medium">{selectedUser.name}</span></p>
-            <div className="mb-4"><label className="block text-sm font-medium mb-1">{t.amount} (π)</label><Input type="number" step="0.001" placeholder="0.008" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></div>
-            <div className="flex gap-3"><Button className="flex-1 bg-purple-600 hover:bg-purple-700 gap-2" onClick={confirmPayment} disabled={!paymentAmount}><Pi className="h-4 w-4" />{t.payWithPi}</Button><Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>Annuler</Button></div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-1">{t.amount} (π)</label>
+              <Input
+                type="number"
+                step="0.001"
+                placeholder="0.008"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                className="flex-1 bg-purple-600 hover:bg-purple-700 gap-2"
+                onClick={confirmPayment}
+                disabled={!paymentAmount}
+              >
+                <Pi className="h-4 w-4" />
+                {t.payWithPi}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>
+                Annuler
+              </Button>
+            </div>
           </div>
         </div>
       )}
