@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Camera,
   Edit,
@@ -30,9 +31,6 @@ import {
   Pi,
   CheckCircle,
   Clock,
-  Facebook,
-  Twitter,
-  Linkedin,
   Copy,
   QrCode,
   Lock,
@@ -43,14 +41,20 @@ import {
   LogOut,
   AlertTriangle,
   X,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useOnlineStatus } from "@/hooks/use-online-status"
+import { useDebounce } from "@/hooks/use-debounce"
+import { useClickOutside } from "@/hooks/use-click-outside"
 
 interface UserProfileProps {
   currentLanguage: string
   userRegion: string
 }
 
-// Traductions multilingues
+// Traductions (identiques à l'original)
 const translations = {
   fr: {
     profile: "Profil",
@@ -108,6 +112,10 @@ const translations = {
     configure: "Configurer",
     followingYou: "Vous suit",
     verified: "Vérifié",
+    online: "En ligne",
+    offline: "Hors ligne",
+    profileUpdated: "Profil mis à jour",
+    changePhoto: "Changer la photo",
   },
   en: {
     profile: "Profile",
@@ -165,6 +173,10 @@ const translations = {
     configure: "Configure",
     followingYou: "Follows you",
     verified: "Verified",
+    online: "Online",
+    offline: "Offline",
+    profileUpdated: "Profile updated",
+    changePhoto: "Change photo",
   },
   es: {
     profile: "Perfil",
@@ -222,6 +234,10 @@ const translations = {
     configure: "Configurar",
     followingYou: "Te sigue",
     verified: "Verificado",
+    online: "En línea",
+    offline: "Desconectado",
+    profileUpdated: "Perfil actualizado",
+    changePhoto: "Cambiar foto",
   },
   pt: {
     profile: "Perfil",
@@ -279,21 +295,25 @@ const translations = {
     configure: "Configurar",
     followingYou: "Segue você",
     verified: "Verificado",
+    online: "Online",
+    offline: "Offline",
+    profileUpdated: "Perfil atualizado",
+    changePhoto: "Alterar foto",
   },
 }
 
 export default function UserProfile({ currentLanguage, userRegion }: UserProfileProps) {
-  const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState("profile")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
   const [language, setLanguage] = useState(currentLanguage)
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("light")
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
 
-  const t = translations[language as keyof typeof translations] || translations.fr
-
-  const [profileData, setProfileData] = useState({
+  // Hooks personnalisés
+  const isOnline = useOnlineStatus()
+  const [profileData, setProfileData] = useLocalStorage("userProfile", {
     name: "Aminata Traoré",
     bio: "Experte en aviculture moderne avec 15 ans d'expérience. Spécialisée dans l'optimisation de la production d'œufs et la gestion sanitaire des élevages.",
     location: "Ouagadougou, Burkina Faso",
@@ -307,8 +327,8 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
     certifications: ["Vétérinaire certifié", "Expert Pi Network", "Formateur agréé"],
     walletAddress: "GCKFBEIYTKQTIQ7VIN54JHKOQ2QZSMH6APPQPLZX2BG4O6JJZWRBTPI7",
   })
-
-  const [stats, setStats] = useState({
+  
+  const [stats, setStats] = useLocalStorage("userStats", {
     followers: 1247,
     following: 89,
     posts: 156,
@@ -318,6 +338,17 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
     piEarned: 12.5847,
     servicesOffered: 5,
   })
+  
+  const [theme, setTheme] = useLocalStorage<"light" | "dark" | "system">("theme", "light")
+  const [isEditing, setIsEditing] = useState(false)
+  const [copied, setCopied] = useState(false)
+  
+  const settingsMenuRef = useRef<HTMLDivElement>(null)
+  const debouncedSearch = useDebounce("", 300)
+  
+  useClickOutside(settingsMenuRef, () => setShowSettingsMenu(false))
+
+  const t = translations[language as keyof typeof translations] || translations.fr
 
   const [activities] = useState([
     { id: 1, type: "service", title: "Nouveau service ajouté: Consultation vétérinaire", date: "2024-02-01", icon: "🐔" },
@@ -357,7 +388,9 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
 
   const handleSaveProfile = () => {
     setIsEditing(false)
-    console.log("Profil sauvegardé:", profileData)
+    setToastMessage(t.profileUpdated)
+    setShowSuccessToast(true)
+    setTimeout(() => setShowSuccessToast(false), 3000)
   }
 
   const copyToClipboard = (text: string) => {
@@ -372,19 +405,45 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
     })
   }
 
+  const handleFollow = () => {
+    setStats({ ...stats, followers: stats.followers + 1 })
+    setToastMessage(`Vous suivez maintenant ${profileData.name}`)
+    setShowSuccessToast(true)
+    setTimeout(() => setShowSuccessToast(false), 2000)
+  }
+
+  const languageOptions = [
+    { code: "fr", name: "Français", flag: "🇫🇷" },
+    { code: "en", name: "English", flag: "🇬🇧" },
+    { code: "es", name: "Español", flag: "🇪🇸" },
+    { code: "pt", name: "Português", flag: "🇵🇹" },
+  ]
+
   return (
     <div className="space-y-6">
+      {/* Toast notification */}
+      {showSuccessToast && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-green-600 text-white rounded-lg p-3 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2"><CheckCircle className="h-5 w-5" /><span>{toastMessage}</span></div>
+            <button onClick={() => setShowSuccessToast(false)}><X className="h-5 w-5" /></button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <Card className="bg-gradient-to-r from-green-600 to-blue-600 text-white">
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="relative">
+            <div className="relative group">
               <div className="w-28 h-28 bg-white/20 rounded-full flex items-center justify-center text-5xl backdrop-blur-sm">
                 {profileData.profileImage}
               </div>
-              <Button size="sm" className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-white/20 hover:bg-white/30 backdrop-blur-sm">
-                <Camera className="h-4 w-4" />
-              </Button>
+              {isEditing && (
+                <Button size="sm" className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-white/20 hover:bg-white/30 backdrop-blur-sm">
+                  <Camera className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <div className="flex-1 text-center md:text-left">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
@@ -392,10 +451,19 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
                   <div className="flex items-center gap-2 justify-center md:justify-start">
                     <h1 className="text-2xl font-bold">{profileData.name}</h1>
                     <Badge className="bg-white/20 text-white border-0">✓ {t.verified}</Badge>
+                    {!isOnline && (
+                      <Badge className="bg-yellow-500 text-white text-xs gap-1">
+                        <WifiOff className="h-3 w-3" />
+                        {t.offline}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm text-green-100 mt-1">
                     <div className="flex items-center gap-1"><MapPin className="h-3 w-3" /><span>{profileData.location}</span></div>
                     <div className="flex items-center gap-1"><Calendar className="h-3 w-3" /><span>{t.memberSince} {formatDate(profileData.joinDate)}</span></div>
+                    {isOnline && (
+                      <div className="flex items-center gap-1"><Wifi className="h-3 w-3 text-green-300" /><span className="text-xs">{t.online}</span></div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 justify-center">
@@ -419,21 +487,41 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold text-blue-600">{stats.followers.toLocaleString()}</div><div className="text-xs text-gray-500">{t.followers}</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold text-green-600">{stats.following}</div><div className="text-xs text-gray-500">{t.following}</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="flex items-center justify-center gap-0.5"><span className="text-xl font-bold text-yellow-600">{stats.rating}</span><Star className="h-4 w-4 text-yellow-500 fill-current" /></div><div className="text-xs text-gray-500">{stats.reviews} {t.reviewsCount}</div></CardContent></Card>
-        <Card><CardContent className="p-3 text-center"><div className="flex items-center justify-center gap-0.5"><Pi className="h-4 w-4 text-purple-600" /><span className="text-xl font-bold text-purple-600">{stats.piEarned.toFixed(2)}</span></div><div className="text-xs text-gray-500">{t.totalEarnings}</div></CardContent></Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => {}}>
+          <CardContent className="p-3 text-center">
+            <div className="text-xl font-bold text-blue-600">{stats.followers.toLocaleString()}</div>
+            <div className="text-xs text-gray-500">{t.followers}</div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => {}}>
+          <CardContent className="p-3 text-center">
+            <div className="text-xl font-bold text-green-600">{stats.following}</div>
+            <div className="text-xs text-gray-500">{t.following}</div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setActiveTab("reviews")}>
+          <CardContent className="p-3 text-center">
+            <div className="flex items-center justify-center gap-0.5"><span className="text-xl font-bold text-yellow-600">{stats.rating}</span><Star className="h-4 w-4 text-yellow-500 fill-current" /></div>
+            <div className="text-xs text-gray-500">{stats.reviews} {t.reviewsCount}</div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setShowQRModal(true)}>
+          <CardContent className="p-3 text-center">
+            <div className="flex items-center justify-center gap-0.5"><Pi className="h-4 w-4 text-purple-600" /><span className="text-xl font-bold text-purple-600">{stats.piEarned.toFixed(2)}</span></div>
+            <div className="text-xs text-gray-500">{t.totalEarnings}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2 justify-center">
-        <Button className="bg-blue-600 hover:bg-blue-700 gap-2"><MessageSquare className="h-4 w-4" />{t.message}</Button>
-        <Button variant="outline" className="gap-2"><Heart className="h-4 w-4" />{t.follow}</Button>
+        <Button className="bg-blue-600 hover:bg-blue-700 gap-2" disabled={!isOnline}><MessageSquare className="h-4 w-4" />{t.message}</Button>
+        <Button variant="outline" className="gap-2" onClick={handleFollow}><Heart className="h-4 w-4" />{t.follow}</Button>
         <Button variant="outline" className="gap-2"><Share2 className="h-4 w-4" />{t.share}</Button>
         <Button variant="outline" className="gap-2" onClick={() => setShowQRModal(true)}><QrCode className="h-4 w-4" />{t.qrCode}</Button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs (identique à l'original) */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-5">
           <TabsTrigger value="profile" className="gap-1"><UserIcon className="h-4 w-4" /><span className="hidden sm:inline">{t.profile}</span></TabsTrigger>
@@ -469,13 +557,13 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><Star className="h-5 w-5 text-yellow-500" />{t.clientReviews} ({stats.reviews})</CardTitle></CardHeader><CardContent><div className="space-y-4">{reviews.map((rev, i) => (<div key={i} className="border-b pb-3 last:border-0"><div className="flex items-center justify-between mb-1"><div className="flex items-center gap-2"><div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold">{rev.avatar}</div><span className="font-medium text-sm">{rev.user}</span></div><div className="flex items-center gap-0.5">{Array(rev.rating).fill(0).map((_, i) => (<Star key={i} className="h-3 w-3 text-yellow-400 fill-current" />))}</div></div><p className="text-sm text-gray-600 mb-1">{rev.comment}</p><div className="flex justify-between text-xs text-gray-400"><span>{t.service}: {rev.service}</span><span>{formatDate(rev.date)}</span></div></div>))}</div></CardContent></Card>
         </TabsContent>
 
-        {/* Paramètres */}
+        {/* Paramètres avec persistance */}
         <TabsContent value="settings" className="space-y-4 mt-6">
           <Card><CardHeader><CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" />{t.accountSettings}</CardTitle></CardHeader><CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.emailNotifications}</h4><p className="text-xs text-gray-400">Recevoir les notifications importantes</p></div><Badge className="bg-green-100 text-green-700">{t.enabled}</Badge></div>
             <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.publicProfile}</h4><p className="text-xs text-gray-400">Permettre aux autres de voir votre profil</p></div><Badge className="bg-green-100 text-green-700">{t.public}</Badge></div>
             <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.twoFactorAuth}</h4><p className="text-xs text-gray-400">Sécuriser votre compte</p></div><Button variant="outline" size="sm">{t.configure}</Button></div>
-            <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.interfaceLanguage}</h4><p className="text-xs text-gray-400">Choisir la langue d'affichage</p></div><Select defaultValue={language} onValueChange={setLanguage}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="fr">Français</SelectItem><SelectItem value="en">English</SelectItem><SelectItem value="es">Español</SelectItem><SelectItem value="pt">Português</SelectItem></SelectContent></Select></div>
+            <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.interfaceLanguage}</h4><p className="text-xs text-gray-400">Choisir la langue d'affichage</p></div><Select value={language} onValueChange={setLanguage}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{languageOptions.map((lang) => (<SelectItem key={lang.code} value={lang.code}><span className="mr-2">{lang.flag}</span>{lang.name}</SelectItem>))}</SelectContent></Select></div>
             <div className="flex items-center justify-between p-3 border rounded-lg"><div><h4 className="font-medium">{t.appearance}</h4><p className="text-xs text-gray-400">Thème de l'application</p></div><div className="flex gap-1"><Button size="sm" variant={theme === "light" ? "default" : "outline"} onClick={() => setTheme("light")} className={theme === "light" ? "bg-green-600" : ""}><Sun className="h-3 w-3" /></Button><Button size="sm" variant={theme === "dark" ? "default" : "outline"} onClick={() => setTheme("dark")} className={theme === "dark" ? "bg-green-600" : ""}><Moon className="h-3 w-3" /></Button><Button size="sm" variant={theme === "system" ? "default" : "outline"} onClick={() => setTheme("system")} className={theme === "system" ? "bg-green-600" : ""}><GlobeIcon className="h-3 w-3" /></Button></div></div>
           </CardContent></Card>
 
@@ -490,7 +578,7 @@ export default function UserProfile({ currentLanguage, userRegion }: UserProfile
 
       {/* Delete Confirmation */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle className="h-5 w-5" />{t.confirmDelete}</DialogTitle></DialogHeader><p className="text-gray-600">{t.deleteAccountWarning}</p><div className="flex gap-3 mt-4"><Button variant="outline" className="flex-1" onClick={() => setShowDeleteConfirm(false)}>{t.cancel}</Button><Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => setShowDeleteConfirm(false)}>{t.deleteAccount}</Button></div></DialogContent>
+        <DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle className="h-5 w-5" />{t.confirmDelete}</DialogTitle></DialogHeader><p className="text-gray-600">{t.deleteAccountWarning}</p><div className="flex gap-3 mt-4"><Button variant="outline" className="flex-1" onClick={() => setShowDeleteConfirm(false)}>{t.cancel}</Button><Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => { setShowDeleteConfirm(false); setToastMessage("Compte supprimé"); setShowSuccessToast(true); setTimeout(() => setShowSuccessToast(false), 2000); }}>{t.deleteAccount}</Button></div></DialogContent>
       </Dialog>
     </div>
   )
