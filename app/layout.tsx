@@ -1,14 +1,14 @@
-import type React from "react";
+// app/layout.tsx
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { AppWrapper } from "@/components/app-wrapper";
+import { Providers } from "@/components/providers"; // 👈 Import du provider
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Made with App Studio",
-  description: "Pi Network app",
-    generator: 'v0.app'
+  title: "Agro Multicenter Hinos",
+  description: "Plateforme agricole connectée pour l'Afrique",
+  generator: 'v0.app'
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <head>
         <style>{`
 html {
@@ -28,7 +28,7 @@ html {
         `}</style>
       </head>
       <body>
-        <AppWrapper>{children}</AppWrapper>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
