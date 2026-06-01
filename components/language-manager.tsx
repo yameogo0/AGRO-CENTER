@@ -30,6 +30,7 @@ import {
   Zap,
   Coffee,
   Target,
+  MapPin, // ← Ajoutez cette ligne
 } from "lucide-react"
 
 interface LanguageManagerProps {
