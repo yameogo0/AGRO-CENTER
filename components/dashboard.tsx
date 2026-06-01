@@ -1,4 +1,4 @@
-"use client"
+
 
 "use client"
 
@@ -43,6 +43,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useOnlineStatus } from "@/hooks/use-online-status"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface DashboardProps {
   currentLanguage: string
@@ -50,7 +53,7 @@ interface DashboardProps {
   onTabChange: (tab: string) => void
 }
 
-// Traductions multilingues
+// Traductions multilingues (identiques à l'original)
 const translations = {
   fr: {
     greetings: "Bonjour",
@@ -91,6 +94,8 @@ const translations = {
     distance: "km",
     day: "jour",
     days: "jours",
+    dismissed: "Masqué",
+    show: "Afficher",
   },
   en: {
     greetings: "Hello",
@@ -131,6 +136,8 @@ const translations = {
     distance: "km",
     day: "day",
     days: "days",
+    dismissed: "Dismissed",
+    show: "Show",
   },
   es: {
     greetings: "Hola",
@@ -171,6 +178,8 @@ const translations = {
     distance: "km",
     day: "día",
     days: "días",
+    dismissed: "Descartado",
+    show: "Mostrar",
   },
   pt: {
     greetings: "Olá",
@@ -211,6 +220,8 @@ const translations = {
     distance: "km",
     day: "dia",
     days: "dias",
+    dismissed: "Descartado",
+    show: "Mostrar",
   },
   dioula: {
     greetings: "I ni ce",
@@ -251,6 +262,8 @@ const translations = {
     distance: "km",
     day: "don",
     days: "donw",
+    dismissed: "Labana",
+    show: "Jira",
   },
   mooré: {
     greetings: "Yelé maanega",
@@ -291,15 +304,23 @@ const translations = {
     distance: "km",
     day: "dɑɑbɑ",
     days: "dɑɑbɑ",
+    dismissed: "Lɑ dɑbɑ",
+    show: "Wilma",
   },
 }
 
 export default function Dashboard({ currentLanguage, userRegion, onTabChange }: DashboardProps) {
-  const [isOnline, setIsOnline] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [currentAdviceIndex, setCurrentAdviceIndex] = useState(0)
-  const [showLanguageMenu, setShowLanguageMenu] = useState(false)
   const [language, setLanguage] = useState(currentLanguage)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showAllProducts, setShowAllProducts] = useState(false)
+
+  // Utilisation des hooks personnalisés
+  const isOnline = useOnlineStatus()
+  const [dismissedAlerts, setDismissedAlerts] = useLocalStorage<string[]>("dismissedAlerts", [])
+  const [favoriteProducts, setFavoriteProducts] = useLocalStorage<string[]>("favoriteProducts", [])
+  const debouncedSearch = useDebounce(searchQuery, 300)
 
   const t = translations[language as keyof typeof translations] || translations.fr
 
@@ -320,7 +341,23 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
   const [alerts] = useState([
     { id: "1", type: "weather", priority: "high", title: "Pluies importantes prévues", message: "Fortes pluies attendues demain après-midi", icon: "🌧️", actionable: true },
     { id: "2", type: "season", priority: "medium", title: "Période de semis optimale", message: "C'est le moment idéal pour semer le maïs", icon: "🌱", actionable: true },
+    { id: "3", type: "market", priority: "low", title: "Hausse des prix", message: "Le prix du maïs a augmenté de 15%", icon: "📈", actionable: true },
   ])
+
+  // Filtrer les alertes non masquées
+  const visibleAlerts = alerts.filter(alert => !dismissedAlerts.includes(alert.id))
+
+  const handleDismissAlert = (alertId: string) => {
+    setDismissedAlerts([...dismissedAlerts, alertId])
+  }
+
+  const handleToggleFavorite = (productId: string) => {
+    if (favoriteProducts.includes(productId)) {
+      setFavoriteProducts(favoriteProducts.filter(id => id !== productId))
+    } else {
+      setFavoriteProducts([...favoriteProducts, productId])
+    }
+  }
 
   const [nearbyUsers] = useState([
     { id: "1", name: "Koffi Asante", distance: 2.3, specialty: "Maraîchage bio", online: true, rating: 4.8, verified: true },
@@ -332,6 +369,7 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
     { id: "1", name: "Mangues Kent", pricePi: 0.5, unit: "kg", seller: "Fatou Kaboré", distance: 1.8, available: true, category: "fruits", image: "🥭" },
     { id: "2", name: "Engrais NPK", pricePi: 25, unit: "sac 50kg", seller: "Coopérative YELEN", distance: 3.2, available: true, category: "intrants", image: "🌾" },
     { id: "3", name: "Poules pondeuses", pricePi: 3.5, unit: "unité", seller: "Moussa Koné", distance: 6.5, available: false, category: "animaux", image: "🐔" },
+    { id: "4", name: "Semences maïs", pricePi: 8, unit: "kg", seller: "INERA", distance: 4.2, available: true, category: "semences", image: "🌽" },
   ])
 
   const [localServices] = useState([
@@ -358,15 +396,27 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
     { code: "mooré", name: "Mooré", flag: "🌾" },
   ]
 
+  // Filtrer les produits par recherche
+  const filteredProducts = localProducts.filter(product =>
+    product.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    product.seller.toLowerCase().includes(debouncedSearch.toLowerCase())
+  )
+
+  const displayedProducts = showAllProducts ? filteredProducts : filteredProducts.slice(0, 3)
+
   useEffect(() => {
     setLanguage(currentLanguage)
   }, [currentLanguage])
 
   useEffect(() => {
+    const timeTimer = setInterval(() => setCurrentTime(new Date()), 60000)
     const adviceTimer = setInterval(() => {
       setCurrentAdviceIndex((prev) => (prev + 1) % weatherData.forecast.length)
     }, 10000)
-    return () => clearInterval(adviceTimer)
+    return () => {
+      clearInterval(timeTimer)
+      clearInterval(adviceTimer)
+    }
   }, [weatherData.forecast.length])
 
   const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -374,14 +424,12 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
 
   const handleLanguageChange = (code: string) => {
     setLanguage(code)
-    setShowLanguageMenu(false)
-    // Ici vous pouvez aussi appeler une fonction parent pour changer la langue globalement
   }
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
-      {/* Header */}
-      <Card className="bg-gradient-to-r from-green-600 to-blue-700 text-white">
+      {/* Header avec statut réseau */}
+      <Card className={`bg-gradient-to-r from-green-600 to-blue-700 text-white ${!isOnline ? "opacity-95" : ""}`}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -389,10 +437,18 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
               <span className="font-medium text-sm">{userRegion}</span>
             </div>
             <div className="flex items-center gap-3">
-              {isOnline ? <Wifi className="h-4 w-4 text-green-300" /> : <WifiOff className="h-4 w-4 text-red-300" />}
-              <span className="text-xs">{isOnline ? t.online : t.offline}</span>
+              {isOnline ? (
+                <div className="flex items-center gap-1">
+                  <Wifi className="h-4 w-4 text-green-300" />
+                  <span className="text-xs">{t.online}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <WifiOff className="h-4 w-4 text-red-300" />
+                  <span className="text-xs">{t.offline}</span>
+                </div>
+              )}
 
-              {/* Sélecteur de langue */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 gap-1">
@@ -424,6 +480,11 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
           <div className="text-center">
             <div className="text-lg font-bold">{t.greetings} ! 👋</div>
             <div className="text-sm text-green-100">{formatTime(currentTime)} • {t.dashboard}</div>
+            {!isOnline && (
+              <div className="mt-2 text-xs text-yellow-200 bg-yellow-500/20 rounded-lg p-1">
+                Mode hors ligne - Données en cache
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -434,6 +495,11 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
           <CardTitle className="flex items-center text-lg">
             <Bell className="h-5 w-5 mr-2" />
             {t.alerts} & {t.tips}
+            {dismissedAlerts.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {visibleAlerts.length}/{alerts.length}
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -478,21 +544,43 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
             </div>
           </div>
 
-          {/* Alertes */}
+          {/* Alertes avec bouton masquer */}
           <div className="space-y-2">
-            {alerts.map((alert) => (
-              <div key={alert.id} className="p-3 border-l-4 border-l-red-500 bg-red-50 rounded-r-lg">
+            {visibleAlerts.slice(0, 2).map((alert) => (
+              <div key={alert.id} className="p-3 border-l-4 border-l-red-500 bg-red-50 rounded-r-lg group relative">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{alert.icon}</span>
                     <span className="font-medium text-sm">{alert.title}</span>
                   </div>
-                  {alert.actionable && <ChevronRight className="h-4 w-4 text-gray-400" />}
+                  <div className="flex items-center gap-2">
+                    {alert.actionable && <ChevronRight className="h-4 w-4 text-gray-400" />}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDismissAlert(alert.id)}
+                    >
+                      <span className="text-xs text-gray-400">✕</span>
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
               </div>
             ))}
           </div>
+
+          {dismissedAlerts.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-gray-400"
+              onClick={() => setDismissedAlerts([])}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              {t.show} {dismissedAlerts.length} alertes masquées
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -521,10 +609,21 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
       {/* Réseau à proximité */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center text-lg">
-            <Map className="h-5 w-5 mr-2" />
-            {t.nearbyNetwork}
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center text-lg">
+              <Map className="h-5 w-5 mr-2" />
+              {t.nearbyNetwork}
+            </CardTitle>
+            <div className="relative w-32">
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                className="w-full px-2 py-1 text-xs border rounded-lg"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="h-28 bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center relative">
@@ -537,6 +636,7 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
             <div className="absolute bottom-4 left-6 w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
           </div>
 
+          {/* Agriculteurs */}
           <div>
             <h4 className="font-medium text-sm mb-2 flex items-center"><Users className="h-4 w-4 mr-1" /> {t.farmers}</h4>
             <div className="space-y-2">
@@ -561,13 +661,28 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
             </div>
           </div>
 
-          {/* Produits avec prix en Pi */}
+          {/* Produits avec prix Pi et favoris */}
           <div>
-            <h4 className="font-medium text-sm mb-2 flex items-center"><ShoppingCart className="h-4 w-4 mr-1" /> {t.products}</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-sm flex items-center"><ShoppingCart className="h-4 w-4 mr-1" /> {t.products}</h4>
+              {filteredProducts.length > 3 && (
+                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowAllProducts(!showAllProducts)}>
+                  {showAllProducts ? "Voir moins" : `+${filteredProducts.length - 3}`}
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {localProducts.map((product) => (
-                <Card key={product.id} className="flex-shrink-0 w-44 cursor-pointer hover:shadow-md">
+              {displayedProducts.map((product) => (
+                <Card key={product.id} className="flex-shrink-0 w-44 cursor-pointer hover:shadow-md relative group">
                   <CardContent className="p-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute top-1 right-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleToggleFavorite(product.id)}
+                    >
+                      <Star className={`h-3 w-3 ${favoriteProducts.includes(product.id) ? "text-yellow-400 fill-current" : "text-gray-300"}`} />
+                    </Button>
                     <div className="flex items-center gap-2 mb-1">
                       <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center text-2xl">{product.image}</div>
                       <div className="flex-1">
@@ -587,13 +702,18 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
                         {product.available ? t.available : t.soldOut}
                       </Badge>
                     </div>
+                    {favoriteProducts.includes(product.id) && (
+                      <div className="absolute -top-1 -left-1">
+                        <Star className="h-3 w-3 text-yellow-400 fill-current" />
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
             </div>
           </div>
 
-          {/* Services avec prix en Pi */}
+          {/* Services avec prix Pi */}
           <div>
             <h4 className="font-medium text-sm mb-2 flex items-center"><Tractor className="h-4 w-4 mr-1" /> {t.services}</h4>
             <div className="space-y-2">
