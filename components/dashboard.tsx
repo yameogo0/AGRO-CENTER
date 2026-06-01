@@ -1,5 +1,7 @@
 "use client"
 
+"use client"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,7 +33,16 @@ import {
   Star,
   ChevronLeft,
   Tractor,
+  ChevronDown,
+  Check,
+  Pi,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface DashboardProps {
   currentLanguage: string
@@ -39,535 +50,440 @@ interface DashboardProps {
   onTabChange: (tab: string) => void
 }
 
-interface WeatherData {
-  temperature: number
-  condition: string
-  icon: string
-  humidity: number
-  windSpeed: number
-  advice: string
-  forecast: {
-    day: string
-    temp: number
-    icon: string
-    condition: string
-    advice: string
-  }[]
-}
-
-interface Alert {
-  id: string
-  type: "weather" | "season" | "market" | "health"
-  priority: "high" | "medium" | "low"
-  title: string
-  message: string
-  actionable: boolean
-  timestamp: string
-  icon: string
-}
-
-interface NearbyUser {
-  id: string
-  name: string
-  distance: number
-  specialty: string
-  avatar: string
-  online: boolean
-  rating: number
-  verified: boolean
-}
-
-interface LocalProduct {
-  id: string
-  name: string
-  price: string
-  unit: string
-  seller: string
-  distance: number
-  image: string
-  available: boolean
-  category: string
-}
-
-interface LocalService {
-  id: string
-  name: string
-  provider: string
-  distance: number
-  price: string
-  available: boolean
-  category: string
-}
-
-interface RecentActivity {
-  id: string
-  type: "personal" | "community" | "news"
-  title: string
-  description: string
-  timestamp: string
-  icon: string
-  actionable: boolean
-  category: string
+// Traductions multilingues
+const translations = {
+  fr: {
+    greetings: "Bonjour",
+    dashboard: "Tableau de bord",
+    online: "En ligne",
+    offline: "Hors ligne",
+    alerts: "Alertes",
+    tips: "Conseils du jour",
+    weather: "Météo agricole",
+    forecast: "Prévisions",
+    quickAccess: "Accès rapide",
+    nearbyNetwork: "Réseau à proximité",
+    products: "Produits",
+    services: "Services",
+    activities: "Activités récentes",
+    news: "Actualités",
+    viewAll: "Voir tout",
+    contact: "Contacter",
+    available: "Disponible",
+    soldOut: "Épuisé",
+    busy: "Occupé",
+    urgent: "Urgent",
+    payWithPi: "Payer avec Pi",
+    priceInPi: "Prix en Pi",
+    myFarm: "Mon exploitation",
+    localMarket: "Marché local",
+    farmerNetwork: "Réseau agriculteurs",
+    knowledge: "Conseils & savoir",
+    piWallet: "Portefeuille Pi",
+    maps: "Cartes & analyses",
+    temperature: "Température",
+    humidity: "Humidité",
+    wind: "Vent",
+    location: "Position",
+    farmers: "agriculteurs",
+    productsCount: "produits",
+    recommended: "Recommandé",
+    distance: "km",
+    day: "jour",
+    days: "jours",
+  },
+  en: {
+    greetings: "Hello",
+    dashboard: "Dashboard",
+    online: "Online",
+    offline: "Offline",
+    alerts: "Alerts",
+    tips: "Daily tips",
+    weather: "Weather",
+    forecast: "Forecast",
+    quickAccess: "Quick access",
+    nearbyNetwork: "Nearby network",
+    products: "Products",
+    services: "Services",
+    activities: "Recent activities",
+    news: "News",
+    viewAll: "View all",
+    contact: "Contact",
+    available: "Available",
+    soldOut: "Sold out",
+    busy: "Busy",
+    urgent: "Urgent",
+    payWithPi: "Pay with Pi",
+    priceInPi: "Price in Pi",
+    myFarm: "My farm",
+    localMarket: "Local market",
+    farmerNetwork: "Farmer network",
+    knowledge: "Tips & knowledge",
+    piWallet: "Pi Wallet",
+    maps: "Maps & analytics",
+    temperature: "Temperature",
+    humidity: "Humidity",
+    wind: "Wind",
+    location: "Location",
+    farmers: "farmers",
+    productsCount: "products",
+    recommended: "Recommended",
+    distance: "km",
+    day: "day",
+    days: "days",
+  },
+  es: {
+    greetings: "Hola",
+    dashboard: "Tablero",
+    online: "En línea",
+    offline: "Desconectado",
+    alerts: "Alertas",
+    tips: "Consejos del día",
+    weather: "Clima agrícola",
+    forecast: "Pronóstico",
+    quickAccess: "Acceso rápido",
+    nearbyNetwork: "Red cercana",
+    products: "Productos",
+    services: "Servicios",
+    activities: "Actividades recientes",
+    news: "Noticias",
+    viewAll: "Ver todo",
+    contact: "Contactar",
+    available: "Disponible",
+    soldOut: "Agotado",
+    busy: "Ocupado",
+    urgent: "Urgente",
+    payWithPi: "Pagar con Pi",
+    priceInPi: "Precio en Pi",
+    myFarm: "Mi granja",
+    localMarket: "Mercado local",
+    farmerNetwork: "Red de agricultores",
+    knowledge: "Consejos y saber",
+    piWallet: "Billetera Pi",
+    maps: "Mapas y análisis",
+    temperature: "Temperatura",
+    humidity: "Humedad",
+    wind: "Viento",
+    location: "Ubicación",
+    farmers: "agricultores",
+    productsCount: "productos",
+    recommended: "Recomendado",
+    distance: "km",
+    day: "día",
+    days: "días",
+  },
+  pt: {
+    greetings: "Olá",
+    dashboard: "Painel",
+    online: "Online",
+    offline: "Offline",
+    alerts: "Alertas",
+    tips: "Dicas do dia",
+    weather: "Clima agrícola",
+    forecast: "Previsão",
+    quickAccess: "Acesso rápido",
+    nearbyNetwork: "Rede próxima",
+    products: "Produtos",
+    services: "Serviços",
+    activities: "Atividades recentes",
+    news: "Notícias",
+    viewAll: "Ver tudo",
+    contact: "Contatar",
+    available: "Disponível",
+    soldOut: "Esgotado",
+    busy: "Ocupado",
+    urgent: "Urgente",
+    payWithPi: "Pagar com Pi",
+    priceInPi: "Preço em Pi",
+    myFarm: "Minha fazenda",
+    localMarket: "Mercado local",
+    farmerNetwork: "Rede de agricultores",
+    knowledge: "Dicas e conhecimento",
+    piWallet: "Carteira Pi",
+    maps: "Mapas e análises",
+    temperature: "Temperatura",
+    humidity: "Umidade",
+    wind: "Vento",
+    location: "Localização",
+    farmers: "agricultores",
+    productsCount: "produtos",
+    recommended: "Recomendado",
+    distance: "km",
+    day: "dia",
+    days: "dias",
+  },
+  dioula: {
+    greetings: "I ni ce",
+    dashboard: "Jatigila",
+    online: "Ɛ ye",
+    offline: "Ɛ tɛ ye",
+    alerts: "Kununnakanw",
+    tips: "Halikimɔgɔya",
+    weather: "Jɛkulu",
+    forecast: "Sini fɛ",
+    quickAccess: "Fara ka da",
+    nearbyNetwork: "Surunyaw",
+    products: "Fenigw",
+    services: "Jɛkuluw",
+    activities: "Baarakɛw",
+    news: "Kunnafonw",
+    viewAll: "Bɛɛ ye",
+    contact: "Se ka jatemɛ",
+    available: "Sɔrɔlen",
+    soldOut: "Ban",
+    busy: "Sɔrɔlen tɛ",
+    urgent: "Surunya",
+    payWithPi: "Sara Pi ye",
+    priceInPi: "Saro Pi la",
+    myFarm: "N ka foroba",
+    localMarket: "Sigida sugu",
+    farmerNetwork: "Demɛsɔnw",
+    knowledge: "Haliki & dɔnniya",
+    piWallet: "Pi Portefeuille",
+    maps: "Karatigɛ & analiziw",
+    temperature: "Kalan",
+    humidity: "Jiɲa",
+    wind: "Finyɛ",
+    location: "Bɔyɔrɔ",
+    farmers: "senekɛlaw",
+    productsCount: "fenigw",
+    recommended: "Aɲinɛ",
+    distance: "km",
+    day: "don",
+    days: "donw",
+  },
+  mooré: {
+    greetings: "Yelé maanega",
+    dashboard: "Tablɛɛto",
+    online: "Lin lam",
+    offline: "Lin ka lam ye",
+    alerts: "Gʋlsgɑ tʋʋmɩ",
+    tips: "Daasgɑ wilma",
+    weather: "Tɩɩsgɑ",
+    forecast: "Beoogo wilma",
+    quickAccess: "Sõms-yɛng tũum",
+    nearbyNetwork: "Mam n pungẽ nebɑ",
+    products: "Biz-ɑtɑlɑ",
+    services: "Tʋʋm-tʋmdba",
+    activities: "Rɩklɑ tʋʋmba",
+    news: "Goam sɛb-nɑ-tɑmbɑ",
+    viewAll: "Fɑa yɑɑ",
+    contact: "Gomd-bi-bɑlɑ",
+    available: "Be yɑɑm",
+    soldOut: "Ka be ye",
+    busy: "Tʋʋmɑ dʋkɑ",
+    urgent: "Sõng-n-wʋsgɑ",
+    payWithPi: "Feef Pi rɩ",
+    priceInPi: "Pees Pi pugɑ",
+    myFarm: "Mɑm koom",
+    localMarket: "Raooodgɑ",
+    farmerNetwork: "Koos-yɑɑmbɑ",
+    knowledge: "Wilma & bãngrɑ",
+    piWallet: "Pi Portefeuille",
+    maps: "Kɑɑrtɑ & tɑɑb-lɑɑ",
+    temperature: "Tɩɩsgɑ",
+    humidity: "Mɑɑsgɑ",
+    wind: "Sɑɑɩsgɑ",
+    location: "Tengɑ",
+    farmers: "koos-yɑɑmbɑ",
+    productsCount: "Biz-ɑtɑlɑ",
+    recommended: "Pɑɑʋgɑ",
+    distance: "km",
+    day: "dɑɑbɑ",
+    days: "dɑɑbɑ",
+  },
 }
 
 export default function Dashboard({ currentLanguage, userRegion, onTabChange }: DashboardProps) {
   const [isOnline, setIsOnline] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [currentAdviceIndex, setCurrentAdviceIndex] = useState(0)
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false)
+  const [language, setLanguage] = useState(currentLanguage)
 
-  const [weatherData, setWeatherData] = useState<WeatherData>({
+  const t = translations[language as keyof typeof translations] || translations.fr
+
+  const [weatherData] = useState({
     temperature: 32,
     condition: "Ensoleillé",
     icon: "☀️",
     humidity: 45,
     windSpeed: 12,
-    advice: "Temps idéal pour les travaux de récolte. Évitez l'arrosage en plein soleil.",
+    advice: "Temps idéal pour les travaux de récolte",
     forecast: [
-      {
-        day: "Aujourd'hui",
-        temp: 32,
-        icon: "☀️",
-        condition: "Ensoleillé",
-        advice: "Parfait pour la récolte du mil",
-      },
-      {
-        day: "Demain",
-        temp: 29,
-        icon: "⛅",
-        condition: "Nuageux",
-        advice: "Bon moment pour les semis",
-      },
-      {
-        day: "Après-demain",
-        temp: 27,
-        icon: "🌧️",
-        condition: "Pluie",
-        advice: "Évitez les pulvérisations",
-      },
+      { day: t.day === "jour" ? "Aujourd'hui" : "Today", temp: 32, icon: "☀️", condition: "Ensoleillé", advice: "Parfait pour la récolte" },
+      { day: t.day === "jour" ? "Demain" : "Tomorrow", temp: 29, icon: "⛅", condition: "Nuageux", advice: "Bon moment pour les semis" },
+      { day: t.day === "jour" ? "Après-demain" : "Day after", temp: 27, icon: "🌧️", condition: "Pluie", advice: "Évitez les pulvérisations" },
     ],
   })
 
-  const [alerts, setAlerts] = useState<Alert[]>([
-    {
-      id: "1",
-      type: "weather",
-      priority: "high",
-      title: "Pluies importantes prévues",
-      message: "Fortes pluies attendues demain après-midi. Protégez vos récoltes et évitez les pulvérisations.",
-      actionable: true,
-      timestamp: "2024-02-01T08:00:00Z",
-      icon: "🌧️",
-    },
-    {
-      id: "2",
-      type: "season",
-      priority: "medium",
-      title: "Période de semis optimale",
-      message: "C'est le moment idéal pour semer le maïs dans votre région. Conditions climatiques favorables.",
-      actionable: true,
-      timestamp: "2024-02-01T06:00:00Z",
-      icon: "🌱",
-    },
-    {
-      id: "3",
-      type: "market",
-      priority: "low",
-      title: "Hausse des prix du mil",
-      message: "Le prix du mil a augmenté de 15% sur le marché de Bobo-Dioulasso. Opportunité de vente.",
-      actionable: false,
-      timestamp: "2024-01-31T18:00:00Z",
-      icon: "📈",
-    },
+  const [alerts] = useState([
+    { id: "1", type: "weather", priority: "high", title: "Pluies importantes prévues", message: "Fortes pluies attendues demain après-midi", icon: "🌧️", actionable: true },
+    { id: "2", type: "season", priority: "medium", title: "Période de semis optimale", message: "C'est le moment idéal pour semer le maïs", icon: "🌱", actionable: true },
   ])
 
-  const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([
-    {
-      id: "1",
-      name: "Koffi Asante",
-      distance: 2.3,
-      specialty: "Maraîchage bio",
-      avatar: "/placeholder.svg?height=40&width=40&text=KA",
-      online: true,
-      rating: 4.8,
-      verified: true,
-    },
-    {
-      id: "2",
-      name: "Aminata Traoré",
-      distance: 5.1,
-      specialty: "Aviculture moderne",
-      avatar: "/placeholder.svg?height=40&width=40&text=AT",
-      online: false,
-      rating: 4.9,
-      verified: true,
-    },
-    {
-      id: "3",
-      name: "Ibrahim Sawadogo",
-      distance: 8.7,
-      specialty: "Céréales & légumineuses",
-      avatar: "/placeholder.svg?height=40&width=40&text=IS",
-      online: true,
-      rating: 4.6,
-      verified: false,
-    },
+  const [nearbyUsers] = useState([
+    { id: "1", name: "Koffi Asante", distance: 2.3, specialty: "Maraîchage bio", online: true, rating: 4.8, verified: true },
+    { id: "2", name: "Aminata Traoré", distance: 5.1, specialty: "Aviculture moderne", online: false, rating: 4.9, verified: true },
+    { id: "3", name: "Ibrahim Sawadogo", distance: 8.7, specialty: "Céréales", online: true, rating: 4.6, verified: false },
   ])
 
-  const [localProducts, setLocalProducts] = useState<LocalProduct[]>([
-    {
-      id: "1",
-      name: "Mangues Kent",
-      price: "500",
-      unit: "kg",
-      seller: "Fatou Kaboré",
-      distance: 1.8,
-      image: "/placeholder.svg?height=60&width=60&text=🥭",
-      available: true,
-      category: "fruits",
-    },
-    {
-      id: "2",
-      name: "Engrais NPK 15-15-15",
-      price: "25000",
-      unit: "sac 50kg",
-      seller: "Coopérative YELEN",
-      distance: 3.2,
-      image: "/placeholder.svg?height=60&width=60&text=🌾",
-      available: true,
-      category: "intrants",
-    },
-    {
-      id: "3",
-      name: "Poules pondeuses ISA",
-      price: "3500",
-      unit: "unité",
-      seller: "Moussa Koné",
-      distance: 6.5,
-      image: "/placeholder.svg?height=60&width=60&text=🐔",
-      available: false,
-      category: "animaux",
-    },
-    {
-      id: "4",
-      name: "Semences de maïs",
-      price: "8000",
-      unit: "kg",
-      seller: "INERA Burkina",
-      distance: 4.2,
-      image: "/placeholder.svg?height=60&width=60&text=🌽",
-      available: true,
-      category: "semences",
-    },
+  const [localProducts] = useState([
+    { id: "1", name: "Mangues Kent", pricePi: 0.5, unit: "kg", seller: "Fatou Kaboré", distance: 1.8, available: true, category: "fruits", image: "🥭" },
+    { id: "2", name: "Engrais NPK", pricePi: 25, unit: "sac 50kg", seller: "Coopérative YELEN", distance: 3.2, available: true, category: "intrants", image: "🌾" },
+    { id: "3", name: "Poules pondeuses", pricePi: 3.5, unit: "unité", seller: "Moussa Koné", distance: 6.5, available: false, category: "animaux", image: "🐔" },
   ])
 
-  const [localServices, setLocalServices] = useState<LocalService[]>([
-    {
-      id: "1",
-      name: "Location tracteur",
-      provider: "Coopérative Mécanisation",
-      distance: 10.5,
-      price: "15000 FCFA/jour",
-      available: true,
-      category: "équipement",
-    },
-    {
-      id: "2",
-      name: "Transport produits",
-      provider: "Transport Sahel",
-      distance: 7.8,
-      price: "100 FCFA/kg",
-      available: true,
-      category: "logistique",
-    },
-    {
-      id: "3",
-      name: "Consultation vétérinaire",
-      provider: "Dr. Aminata Traoré",
-      distance: 5.1,
-      price: "0.008π",
-      available: false,
-      category: "conseil",
-    },
-  ])
-
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([
-    {
-      id: "1",
-      type: "personal",
-      title: "Nouvelle parcelle ajoutée",
-      description: "Vous avez enregistré une parcelle de riz de 2 hectares dans votre exploitation",
-      timestamp: "2024-02-01T10:30:00Z",
-      icon: "🌾",
-      actionable: true,
-      category: "exploitation",
-    },
-    {
-      id: "2",
-      type: "community",
-      title: "Nouveau membre du réseau",
-      description: "Awa Ouédraogo (spécialiste igname) a rejoint votre réseau local",
-      timestamp: "2024-02-01T09:15:00Z",
-      icon: "👥",
-      actionable: false,
-      category: "réseau",
-    },
-    {
-      id: "3",
-      type: "news",
-      title: "Formation agriculture biologique",
-      description: "Formation gratuite sur l'agriculture biologique à Bobo-Dioulasso le 15 février",
-      timestamp: "2024-01-31T16:45:00Z",
-      icon: "🎓",
-      actionable: true,
-      category: "formation",
-    },
-    {
-      id: "4",
-      type: "personal",
-      title: "Transaction Pi réussie",
-      description: "Vous avez reçu 0.008π pour votre consultation en aviculture",
-      timestamp: "2024-01-31T14:20:00Z",
-      icon: "💰",
-      actionable: false,
-      category: "finance",
-    },
+  const [localServices] = useState([
+    { id: "1", name: "Location tracteur", provider: "Coopérative Mécanisation", distance: 10.5, pricePi: 15, available: true, category: "équipement" },
+    { id: "2", name: "Transport produits", provider: "Transport Sahel", distance: 7.8, pricePi: 0.1, unit: "kg", available: true, category: "logistique" },
+    { id: "3", name: "Consultation vétérinaire", provider: "Dr. Aminata Traoré", distance: 5.1, pricePi: 0.008, available: false, category: "conseil" },
   ])
 
   const quickAccessModules = [
-    {
-      id: "exploitation",
-      title: "Mon Exploitation",
-      icon: "🏡", // Maison/ferme culturellement appropriée
-      color: "bg-green-500",
-      description: "Journal, parcelles, calendrier",
-      tab: "aviculture",
-      culturalIcon: Sprout,
-    },
-    {
-      id: "market",
-      title: "Marché Local",
-      icon: "🏪", // Boutique/marché
-      color: "bg-blue-500",
-      description: "Acheter, vendre, prix",
-      tab: "services",
-      culturalIcon: Store,
-    },
-    {
-      id: "network",
-      title: "Réseau Agriculteurs",
-      icon: "👥", // Groupe de personnes
-      color: "bg-purple-500",
-      description: "Messages, communauté",
-      tab: "messages",
-      culturalIcon: Users,
-    },
-    {
-      id: "knowledge",
-      title: "Conseils & Savoir",
-      icon: "📚", // Livre de connaissances
-      color: "bg-orange-500",
-      description: "Guides, formations",
-      tab: "regional",
-      culturalIcon: BookOpen,
-    },
-    {
-      id: "wallet",
-      title: "Paiement π",
-      icon: "💰", // Argent/portefeuille
-      color: "bg-yellow-500",
-      description: "Portefeuille Pi",
-      tab: "wallet",
-      culturalIcon: Wallet,
-    },
-    {
-      id: "analytics",
-      title: "Cartes & Analyses",
-      icon: "🗺️", // Carte géographique
-      color: "bg-indigo-500",
-      description: "Sols, climat, données",
-      tab: "geolocation",
-      culturalIcon: Map,
-    },
+    { id: "exploitation", title: t.myFarm, icon: "🏡", color: "bg-green-500", tab: "aviculture" },
+    { id: "market", title: t.localMarket, icon: "🏪", color: "bg-blue-500", tab: "services" },
+    { id: "network", title: t.farmerNetwork, icon: "👥", color: "bg-purple-500", tab: "messages" },
+    { id: "knowledge", title: t.knowledge, icon: "📚", color: "bg-orange-500", tab: "regional" },
+    { id: "wallet", title: t.piWallet, icon: "💰", color: "bg-yellow-500", tab: "wallet" },
+    { id: "analytics", title: t.maps, icon: "🗺️", color: "bg-indigo-500", tab: "geolocation" },
+  ]
+
+  const languageOptions = [
+    { code: "fr", name: "Français", flag: "🇫🇷" },
+    { code: "en", name: "English", flag: "🇬🇧" },
+    { code: "es", name: "Español", flag: "🇪🇸" },
+    { code: "pt", name: "Português", flag: "🇵🇹" },
+    { code: "dioula", name: "Dioula", flag: "🌍" },
+    { code: "mooré", name: "Mooré", flag: "🌾" },
   ]
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 60000) // Update every minute
+    setLanguage(currentLanguage)
+  }, [currentLanguage])
 
-    // Simulate network status
-    const networkTimer = setInterval(() => {
-      setIsOnline(Math.random() > 0.1) // 90% online
-    }, 30000)
-
-    // Rotate advice every 10 seconds
+  useEffect(() => {
     const adviceTimer = setInterval(() => {
       setCurrentAdviceIndex((prev) => (prev + 1) % weatherData.forecast.length)
     }, 10000)
-
-    return () => {
-      clearInterval(timer)
-      clearInterval(networkTimer)
-      clearInterval(adviceTimer)
-    }
+    return () => clearInterval(adviceTimer)
   }, [weatherData.forecast.length])
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
-
-  const getAlertIcon = (type: string, priority: string) => {
-    if (priority === "high") return <AlertTriangle className="h-4 w-4 text-red-500" />
-    if (type === "weather") return <Cloud className="h-4 w-4 text-blue-500" />
-    if (type === "season") return <Sprout className="h-4 w-4 text-green-500" />
-    if (type === "market") return <TrendingUp className="h-4 w-4 text-purple-500" />
-    return <Bell className="h-4 w-4 text-gray-500" />
-  }
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "border-l-red-500 bg-red-50"
-      case "medium":
-        return "border-l-yellow-500 bg-yellow-50"
-      case "low":
-        return "border-l-blue-500 bg-blue-50"
-      default:
-        return "border-l-gray-500 bg-gray-50"
-    }
-  }
-
+  const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   const currentAdvice = weatherData.forecast[currentAdviceIndex]
+
+  const handleLanguageChange = (code: string) => {
+    setLanguage(code)
+    setShowLanguageMenu(false)
+    // Ici vous pouvez aussi appeler une fonction parent pour changer la langue globalement
+  }
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
-      {/* Header - Bannière Supérieure */}
-      <Card className="bg-gradient-to-r from-green-500 to-blue-600 text-white">
+      {/* Header */}
+      <Card className="bg-gradient-to-r from-green-600 to-blue-700 text-white">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-4">
-            {/* Localisation Actuelle */}
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
-                <MapPin className="h-4 w-4" />
-                <span className="font-medium text-sm">{userRegion}</span>
-                <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 p-1">
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
-              </div>
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              <span className="font-medium text-sm">{userRegion}</span>
             </div>
-
-            {/* Indicateurs de statut */}
-            <div className="flex items-center space-x-3">
-              {/* Statut réseau */}
-              <div className="flex items-center space-x-2">
-                {isOnline ? <Wifi className="h-4 w-4 text-green-300" /> : <WifiOff className="h-4 w-4 text-red-300" />}
-                <span className="text-xs">{isOnline ? "En ligne" : "Hors ligne"}</span>
-              </div>
+            <div className="flex items-center gap-3">
+              {isOnline ? <Wifi className="h-4 w-4 text-green-300" /> : <WifiOff className="h-4 w-4 text-red-300" />}
+              <span className="text-xs">{isOnline ? t.online : t.offline}</span>
 
               {/* Sélecteur de langue */}
-              <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 p-2">
-                <Globe className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 gap-1">
+                    <Globe className="h-4 w-4" />
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  {languageOptions.map((lang) => (
+                    <DropdownMenuItem
+                      key={lang.code}
+                      onClick={() => handleLanguageChange(lang.code)}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                      {language === lang.code && <Check className="h-4 w-4 ml-auto text-green-600" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-              {/* Icône de confidentialité */}
-              <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 p-2">
-                <Shield className="h-4 w-4" />
-              </Button>
-
-              {/* Profil utilisateur */}
               <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 p-2">
                 <User className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          {/* Salutation personnalisée */}
           <div className="text-center">
-            <div className="text-lg font-bold">Bonjour ! 👋</div>
-            <div className="text-sm text-green-100">{formatTime(currentTime)} • Tableau de bord personnalisé</div>
+            <div className="text-lg font-bold">{t.greetings} ! 👋</div>
+            <div className="text-sm text-green-100">{formatTime(currentTime)} • {t.dashboard}</div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Section 1: Mes Alertes & Conseils du Jour */}
+      {/* Alertes et météo */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center text-lg">
             <Bell className="h-5 w-5 mr-2" />
-            Mes Alertes & Conseils du Jour
+            {t.alerts} & {t.tips}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Météo Agricole avec conseil rotatif */}
+          {/* Météo */}
           <div className="relative">
             <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-4">
                 <div className="text-4xl">{weatherData.icon}</div>
                 <div>
                   <div className="font-bold text-xl">{weatherData.temperature}°C</div>
                   <div className="text-sm text-gray-600">{weatherData.condition}</div>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
-                    <div className="flex items-center">
-                      <Droplets className="h-3 w-3 mr-1" />
-                      <span>{weatherData.humidity}%</span>
-                    </div>
-                    <div className="flex items-center">
-                      <Wind className="h-3 w-3 mr-1" />
-                      <span>{weatherData.windSpeed} km/h</span>
-                    </div>
+                  <div className="flex gap-3 text-xs text-gray-500">
+                    <div className="flex items-center"><Droplets className="h-3 w-3 mr-1" />{weatherData.humidity}%</div>
+                    <div className="flex items-center"><Wind className="h-3 w-3 mr-1" />{weatherData.windSpeed} km/h</div>
                   </div>
                 </div>
               </div>
-
-              {/* Prévisions avec navigation */}
               <div className="text-right">
-                <div className="text-sm font-medium text-blue-800 mb-2">Prévisions</div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="p-1"
-                    onClick={() =>
-                      setCurrentAdviceIndex(
-                        (prev) => (prev - 1 + weatherData.forecast.length) % weatherData.forecast.length,
-                      )
-                    }
-                  >
+                <div className="text-sm font-medium text-blue-800 mb-2">{t.forecast}</div>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" className="p-1" onClick={() => setCurrentAdviceIndex((prev) => (prev - 1 + 3) % 3)}>
                     <ChevronLeft className="h-3 w-3" />
                   </Button>
-                  <div className="text-center min-w-[80px]">
+                  <div className="text-center min-w-[70px]">
                     <div className="text-2xl">{currentAdvice.icon}</div>
                     <div className="text-xs font-medium">{currentAdvice.temp}°</div>
                     <div className="text-xs text-gray-600">{currentAdvice.day}</div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="p-1"
-                    onClick={() => setCurrentAdviceIndex((prev) => (prev + 1) % weatherData.forecast.length)}
-                  >
+                  <Button size="sm" variant="ghost" className="p-1" onClick={() => setCurrentAdviceIndex((prev) => (prev + 1) % 3)}>
                     <ChevronRight className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
             </div>
 
-            {/* Conseil agricole rotatif */}
             <div className="mt-2 p-3 bg-green-100 rounded-lg">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <Sprout className="h-4 w-4 text-green-600" />
-                <p className="text-sm font-medium text-green-800">Conseil du jour:</p>
+                <p className="text-sm font-medium text-green-800">{t.tips}:</p>
               </div>
               <p className="text-sm text-green-700 mt-1">{currentAdvice.advice}</p>
             </div>
           </div>
 
-          {/* Alertes prioritaires */}
+          {/* Alertes */}
           <div className="space-y-2">
-            {alerts.slice(0, 2).map((alert) => (
-              <div key={alert.id} className={`p-3 border-l-4 rounded-r-lg ${getPriorityColor(alert.priority)}`}>
+            {alerts.map((alert) => (
+              <div key={alert.id} className="p-3 border-l-4 border-l-red-500 bg-red-50 rounded-r-lg">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-2">
                     <span className="text-lg">{alert.icon}</span>
                     <span className="font-medium text-sm">{alert.title}</span>
                   </div>
@@ -577,36 +493,24 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
               </div>
             ))}
           </div>
-
-          {alerts.length > 2 && (
-            <Button variant="outline" size="sm" className="w-full bg-transparent">
-              Voir toutes les alertes ({alerts.length})
-            </Button>
-          )}
         </CardContent>
       </Card>
 
-      {/* Section 2: Modules d'Accès Rapide */}
+      {/* Accès rapide */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center text-lg">
             <Activity className="h-5 w-5 mr-2" />
-            Accès Rapide
+            {t.quickAccess}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {quickAccessModules.map((module) => (
-              <Card
-                key={module.id}
-                className="cursor-pointer hover:shadow-lg transition-all duration-200 border-2 hover:border-blue-200"
-                onClick={() => onTabChange(module.tab)}
-              >
-                <CardContent className="p-4 text-center">
-                  {/* Icône culturelle */}
-                  <div className="text-4xl mb-3">{module.icon}</div>
-                  <h3 className="font-semibold text-sm mb-1">{module.title}</h3>
-                  <p className="text-xs text-gray-600">{module.description}</p>
+              <Card key={module.id} className="cursor-pointer hover:shadow-lg transition-all" onClick={() => onTabChange(module.tab)}>
+                <CardContent className="p-3 text-center">
+                  <div className="text-3xl mb-1">{module.icon}</div>
+                  <h3 className="font-semibold text-xs">{module.title}</h3>
                 </CardContent>
               </Card>
             ))}
@@ -614,106 +518,73 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
         </CardContent>
       </Card>
 
-      {/* Section 3: Le Réseau à Proximité */}
+      {/* Réseau à proximité */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-lg">
-            <div className="flex items-center">
-              <Map className="h-5 w-5 mr-2" />
-              Réseau à Proximité
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => onTabChange("messages")}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+          <CardTitle className="flex items-center text-lg">
+            <Map className="h-5 w-5 mr-2" />
+            {t.nearbyNetwork}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Carte Miniature */}
-          <div className="h-32 bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-200/30 to-blue-200/30"></div>
-            <div className="relative z-10 text-center">
-              <MapPin className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <p className="text-sm font-medium">Votre Position</p>
-              <p className="text-xs text-gray-600">
-                {nearbyUsers.length} agriculteurs • {localProducts.length} produits
-              </p>
+          <div className="h-28 bg-gradient-to-br from-green-100 to-blue-100 rounded-lg flex items-center justify-center relative">
+            <div className="text-center">
+              <MapPin className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+              <p className="text-xs font-medium">{t.location}</p>
+              <p className="text-xs text-gray-600">{nearbyUsers.length} {t.farmers} • {localProducts.length} {t.productsCount}</p>
             </div>
-            {/* Points d'intérêt simulés */}
-            <div className="absolute top-4 right-6 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <div className="absolute bottom-6 left-8 w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-            <div className="absolute top-8 left-12 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+            <div className="absolute top-2 right-4 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div className="absolute bottom-4 left-6 w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
           </div>
 
-          {/* Agriculteurs Proches */}
           <div>
-            <h4 className="font-medium text-sm mb-3 flex items-center">
-              <Users className="h-4 w-4 mr-2" />
-              Agriculteurs Proches
-            </h4>
+            <h4 className="font-medium text-sm mb-2 flex items-center"><Users className="h-4 w-4 mr-1" /> {t.farmers}</h4>
             <div className="space-y-2">
-              {nearbyUsers.slice(0, 3).map((user) => (
-                <div key={user.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
+              {nearbyUsers.map((user) => (
+                <div key={user.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
                     <div className="relative">
-                      <img src={user.avatar || "/placeholder.svg"} alt={user.name} className="w-10 h-10 rounded-full" />
-                      {user.online && (
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                      )}
-                      {user.verified && (
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">✓</span>
-                        </div>
-                      )}
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-lg">
+                        {user.name.charAt(0)}
+                      </div>
+                      {user.online && <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-white"></div>}
                     </div>
                     <div>
                       <p className="font-medium text-sm">{user.name}</p>
-                      <p className="text-xs text-gray-600">
-                        {user.specialty} • {user.distance}km
-                      </p>
-                      <div className="flex items-center">
-                        <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-                        <span className="text-xs">{user.rating}</span>
-                      </div>
+                      <p className="text-xs text-gray-500">{user.specialty} • {user.distance}km</p>
+                      <div className="flex items-center"><Star className="h-3 w-3 text-yellow-400 fill-current" /><span className="text-xs ml-1">{user.rating}</span></div>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline">
-                    <MessageSquare className="h-3 w-3 mr-1" />
-                    Contact
-                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1"><MessageSquare className="h-3 w-3" />{t.contact}</Button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Produits Disponibles */}
+          {/* Produits avec prix en Pi */}
           <div>
-            <h4 className="font-medium text-sm mb-3 flex items-center">
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Produits Disponibles
-            </h4>
-            <div className="flex space-x-3 overflow-x-auto pb-2">
+            <h4 className="font-medium text-sm mb-2 flex items-center"><ShoppingCart className="h-4 w-4 mr-1" /> {t.products}</h4>
+            <div className="flex gap-2 overflow-x-auto pb-2">
               {localProducts.map((product) => (
-                <Card key={product.id} className="flex-shrink-0 w-48 cursor-pointer hover:shadow-md transition-shadow">
-                  <CardContent className="p-3">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <img src={product.image || "/placeholder.svg"} alt={product.name} className="w-12 h-12 rounded" />
+                <Card key={product.id} className="flex-shrink-0 w-44 cursor-pointer hover:shadow-md">
+                  <CardContent className="p-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center text-2xl">{product.image}</div>
                       <div className="flex-1">
-                        <p className="font-medium text-sm">{product.name}</p>
-                        <p className="text-xs text-gray-600">{product.seller}</p>
-                        <Badge variant="outline" className="text-xs mt-1">
-                          {product.category}
-                        </Badge>
+                        <p className="font-medium text-xs">{product.name}</p>
+                        <p className="text-xs text-gray-500">{product.seller}</p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mt-1">
                       <div>
-                        <p className="font-bold text-sm text-green-600">
-                          {product.price} FCFA/{product.unit}
-                        </p>
-                        <p className="text-xs text-gray-500">{product.distance}km</p>
+                        <div className="flex items-center gap-0.5">
+                          <Pi className="h-3 w-3 text-purple-600" />
+                          <p className="font-bold text-sm text-purple-600">{product.pricePi} π</p>
+                        </div>
+                        <p className="text-xs text-gray-400">{product.unit}</p>
                       </div>
-                      <Badge variant={product.available ? "default" : "secondary"}>
-                        {product.available ? "Dispo" : "Épuisé"}
+                      <Badge variant={product.available ? "default" : "secondary"} className={product.available ? "bg-green-600 text-xs" : "text-xs"}>
+                        {product.available ? t.available : t.soldOut}
                       </Badge>
                     </div>
                   </CardContent>
@@ -722,25 +593,24 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
             </div>
           </div>
 
-          {/* Services Locaux */}
+          {/* Services avec prix en Pi */}
           <div>
-            <h4 className="font-medium text-sm mb-3 flex items-center">
-              <Tractor className="h-4 w-4 mr-2" />
-              Services Disponibles
-            </h4>
+            <h4 className="font-medium text-sm mb-2 flex items-center"><Tractor className="h-4 w-4 mr-1" /> {t.services}</h4>
             <div className="space-y-2">
-              {localServices.slice(0, 2).map((service) => (
-                <div key={service.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              {localServices.map((service) => (
+                <div key={service.id} className="flex items-center justify-between p-2 bg-blue-50 rounded-lg">
                   <div>
                     <p className="font-medium text-sm">{service.name}</p>
-                    <p className="text-xs text-gray-600">
-                      {service.provider} • {service.distance}km
-                    </p>
-                    <p className="text-xs font-medium text-blue-600">{service.price}</p>
+                    <p className="text-xs text-gray-600">{service.provider} • {service.distance}km</p>
+                    <div className="flex items-center gap-0.5">
+                      <Pi className="h-3 w-3 text-purple-600" />
+                      <p className="text-xs font-medium text-purple-600">{service.pricePi} π{service.unit && `/${service.unit}`}</p>
+                    </div>
                   </div>
-                  <Badge variant={service.available ? "default" : "secondary"}>
-                    {service.available ? "Disponible" : "Occupé"}
-                  </Badge>
+                  <Button size="sm" disabled={!service.available} className={service.available ? "bg-purple-600 hover:bg-purple-700 gap-1" : ""}>
+                    <Pi className="h-3 w-3" />
+                    {t.payWithPi}
+                  </Button>
                 </div>
               ))}
             </div>
@@ -748,95 +618,31 @@ export default function Dashboard({ currentLanguage, userRegion, onTabChange }: 
         </CardContent>
       </Card>
 
-      {/* Section 4: Activités Récentes & Actualités */}
+      {/* Activités récentes */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center text-lg">
             <Activity className="h-5 w-5 mr-2" />
-            Activités Récentes & Actualités
+            {t.activities}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+          <div className="space-y-2">
+            {[
+              { icon: "🌾", title: "Nouvelle parcelle ajoutée", desc: "Parcelle de riz de 2 hectares", category: "exploitation" },
+              { icon: "👥", title: "Nouveau membre", desc: "Awa Ouédraogo a rejoint votre réseau", category: "réseau" },
+              { icon: "💰", title: "Transaction Pi réussie", desc: "Vous avez reçu 0.008π", category: "finance" },
+            ].map((activity, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
                 <div className="text-2xl">{activity.icon}</div>
                 <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <p className="font-medium text-sm">{activity.title}</p>
-                    <Badge variant="outline" className="text-xs">
-                      {activity.category}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-gray-600">{activity.description}</p>
-                  <p className="text-xs text-gray-400">{new Date(activity.timestamp).toLocaleDateString()}</p>
-                </div>
-                {activity.actionable && <ChevronRight className="h-4 w-4 text-gray-400" />}
-              </div>
-            ))}
-          </div>
-          <Button variant="outline" size="sm" className="w-full mt-4 bg-transparent">
-            Voir plus d'activités
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Actualités Communautaires */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center text-lg">
-            <Bell className="h-5 w-5 mr-2" />
-            Actualités Communautaires
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[
-              {
-                title: "🎓 Formation Agriculture Biologique",
-                description: "La coopérative YELEN organise une formation gratuite le 15 février à Bobo-Dioulasso",
-                type: "formation",
-                urgent: false,
-                icon: "🎓",
-              },
-              {
-                title: "💰 Subvention Gouvernementale",
-                description:
-                  "Nouvelles subventions disponibles pour l'achat d'équipements agricoles - Dossiers à déposer avant le 28 février",
-                type: "finance",
-                urgent: true,
-                icon: "💰",
-              },
-              {
-                title: "🌾 Vente Groupée de Semences",
-                description: "Commande groupée de semences certifiées - Prix réduits de 20% jusqu'au 20 février",
-                type: "marché",
-                urgent: false,
-                icon: "🌾",
-              },
-            ].map((news, index) => (
-              <div key={index} className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-lg">{news.icon}</span>
-                    <h4 className="font-medium text-sm">{news.title}</h4>
-                  </div>
-                  {news.urgent && (
-                    <Badge variant="destructive" className="text-xs">
-                      Urgent
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-xs text-gray-600 mb-2">{news.description}</p>
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-xs">
-                    {news.type}
-                  </Badge>
-                  <ChevronRight className="h-3 w-3 text-gray-400" />
+                  <p className="font-medium text-sm">{activity.title}</p>
+                  <p className="text-xs text-gray-500">{activity.desc}</p>
                 </div>
               </div>
             ))}
           </div>
+          <Button variant="outline" size="sm" className="w-full mt-3">{t.viewAll}</Button>
         </CardContent>
       </Card>
     </div>
