@@ -367,4 +367,92 @@ export default function RegionalAdaptation({ currentLanguage, userRegion, onRegi
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 bg-yellow-50 rounded-lg">
-                  <h4 className="font-semibold text-yellow-800 mb-2">Saison s\
+                  <h4 className="font-semibold text-yellow-800 mb-2">Saison sèche</h4>
+                  <p className="text-sm text-gray-600 mb-2">Novembre à Mai</p>
+                  <p className="text-sm">💡 Préparez vos champs pour l'irrigation</p>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <h4 className="font-semibold text-green-800 mb-2">Saison des pluies</h4>
+                  <p className="text-sm text-gray-600 mb-2">Juin à Octobre</p>
+                  <p className="text-sm">💡 Période idéale pour les semis</p>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg">
+                  <h4 className="font-semibold text-orange-800 mb-2">Récoltes</h4>
+                  <p className="text-sm text-gray-600 mb-2">Septembre à Décembre</p>
+                  <p className="text-sm">💡 Préparez le stockage des récoltes</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="services" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Services professionnels à proximité</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {localServices.map((service, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <h4 className="font-semibold">{service.name}</h4>
+                      <p className="text-sm text-gray-500">{service.type}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {service.specialties.map((spec, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">
+                            {spec}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">{service.distance}</div>
+                      <div className="text-sm text-yellow-500">★ {service.rating}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="change" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Modifier ma région</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Rechercher un pays..."
+                    className="w-full p-2 border rounded-lg"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {filteredCountries.map((country) => (
+                    <button
+                      key={country}
+                      onClick={() => {
+                        onRegionChange(country)
+                        setActiveTab("overview")
+                      }}
+                      className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-green-50 transition-colors"
+                    >
+                      <span className="text-2xl">{regions[country]?.flag || "🌍"}</span>
+                      <span className="font-medium">{country}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
