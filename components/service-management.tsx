@@ -43,14 +43,19 @@ import {
   Landmark,
   Megaphone,
   Utensils,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useDebounce } from "@/hooks/use-debounce"
+import { useOnlineStatus } from "@/hooks/use-online-status"
 
 interface ServiceManagementProps {
   currentLanguage: string
   userRegion: string
 }
 
-// Traductions multilingues
+// Traductions multilingues (identiques à l'original)
 const translations = {
   fr: {
     title: "Gestion des Services",
@@ -130,6 +135,10 @@ const translations = {
     bookingsCount: "Réservations",
     avgPrice: "Prix moyen",
     categoryIcon: "Catégorie",
+    online: "En ligne",
+    offline: "Hors ligne",
+    serviceCreated: "Service créé avec succès",
+    serviceDeleted: "Service supprimé",
   },
   en: {
     title: "Service Management",
@@ -209,6 +218,10 @@ const translations = {
     bookingsCount: "Bookings",
     avgPrice: "Average price",
     categoryIcon: "Category",
+    online: "Online",
+    offline: "Offline",
+    serviceCreated: "Service created successfully",
+    serviceDeleted: "Service deleted",
   },
   es: {
     title: "Gestión de Servicios",
@@ -288,6 +301,10 @@ const translations = {
     bookingsCount: "Reservas",
     avgPrice: "Precio promedio",
     categoryIcon: "Categoría",
+    online: "En línea",
+    offline: "Desconectado",
+    serviceCreated: "Servicio creado exitosamente",
+    serviceDeleted: "Servicio eliminado",
   },
   pt: {
     title: "Gestão de Serviços",
@@ -367,6 +384,10 @@ const translations = {
     bookingsCount: "Reservas",
     avgPrice: "Preço médio",
     categoryIcon: "Categoria",
+    online: "Online",
+    offline: "Offline",
+    serviceCreated: "Serviço criado com sucesso",
+    serviceDeleted: "Serviço excluído",
   },
 }
 
@@ -389,33 +410,16 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
   const [showCreateService, setShowCreateService] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [language, setLanguage] = useState(currentLanguage)
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState("")
+  const [toastType, setToastType] = useState<"success" | "error" | "info">("success")
 
-  const t = translations[language as keyof typeof translations] || translations.fr
-
-  const [newService, setNewService] = useState({
-    title: "",
-    description: "",
-    category: "",
-    price: "",
-    duration: "",
-    location: "",
-    requirements: "",
-    availability: "available",
-  })
-
-  const serviceCategories = [
-    { id: "all", name: t.allCategories, count: 156 },
-    { id: "veterinary", name: t.veterinary, count: 23 },
-    { id: "training", name: t.training, count: 34 },
-    { id: "consulting", name: t.consulting, count: 28 },
-    { id: "equipment", name: t.equipment, count: 19 },
-    { id: "feed", name: t.feed, count: 15 },
-    { id: "processing", name: t.processing, count: 12 },
-    { id: "marketing", name: t.marketing, count: 18 },
-    { id: "finance", name: t.finance, count: 7 },
-  ]
-
-  const [availableServices, setAvailableServices] = useState([
+  // Hooks personnalisés
+  const isOnline = useOnlineStatus()
+  const debouncedSearch = useDebounce(searchQuery, 300)
+  
+  // Persistance des services dans localStorage
+  const [persistedServices, setPersistedServices] = useLocalStorage("availableServices", [
     {
       id: "service1",
       title: "Consultation vétérinaire aviculture",
@@ -478,7 +482,7 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
     },
   ])
 
-  const [myServices, setMyServices] = useState([
+  const [persistedMyServices, setPersistedMyServices] = useLocalStorage("myServices", [
     {
       id: "myservice1",
       title: "Conseil en gestion d'élevage",
@@ -505,12 +509,53 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
     },
   ])
 
+  const t = translations[language as keyof typeof translations] || translations.fr
+
+  const [newService, setNewService] = useState({
+    title: "",
+    description: "",
+    category: "",
+    price: "",
+    duration: "",
+    location: "",
+    requirements: "",
+    availability: "available",
+  })
+
+  const serviceCategories = [
+    { id: "all", name: t.allCategories, count: persistedServices.length + persistedMyServices.length },
+    { id: "veterinary", name: t.veterinary, count: persistedServices.filter(s => s.category === "veterinary").length },
+    { id: "training", name: t.training, count: persistedServices.filter(s => s.category === "training").length + persistedMyServices.filter(s => s.category === "training").length },
+    { id: "consulting", name: t.consulting, count: persistedServices.filter(s => s.category === "consulting").length + persistedMyServices.filter(s => s.category === "consulting").length },
+    { id: "equipment", name: t.equipment, count: persistedServices.filter(s => s.category === "equipment").length },
+    { id: "feed", name: t.feed, count: persistedServices.filter(s => s.category === "feed").length },
+    { id: "processing", name: t.processing, count: persistedServices.filter(s => s.category === "processing").length },
+    { id: "marketing", name: t.marketing, count: persistedServices.filter(s => s.category === "marketing").length },
+    { id: "finance", name: t.finance, count: persistedServices.filter(s => s.category === "finance").length },
+  ]
+
   useEffect(() => {
     setLanguage(currentLanguage)
   }, [currentLanguage])
 
+  // Afficher un toast
+  const showToastMessage = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToastMessage(message)
+    setToastType(type)
+    setShowToast(true)
+    setTimeout(() => setShowToast(false), 3000)
+  }
+
   const handleCreateService = () => {
-    if (!newService.title || !newService.category || !newService.price) return
+    if (!newService.title || !newService.category || !newService.price) {
+      showToastMessage("Veuillez remplir tous les champs obligatoires", "error")
+      return
+    }
+
+    if (!isOnline) {
+      showToastMessage("Connexion internet requise pour créer un service", "error")
+      return
+    }
 
     const service = {
       id: `service${Date.now()}`,
@@ -533,8 +578,8 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
       createdAt: new Date().toISOString(),
     }
 
-    setAvailableServices([service, ...availableServices])
-    setMyServices([{
+    setPersistedServices([service, ...persistedServices])
+    setPersistedMyServices([{
       id: service.id,
       title: service.title,
       description: service.description,
@@ -545,7 +590,7 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
       earnings: 0,
       rating: 0,
       createdAt: service.createdAt,
-    }, ...myServices])
+    }, ...persistedMyServices])
 
     setShowCreateService(false)
     setNewService({
@@ -558,40 +603,67 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
       requirements: "",
       availability: "available",
     })
+    
+    showToastMessage(t.serviceCreated, "success")
   }
 
   const handleDeleteService = (id: string) => {
-    setMyServices(myServices.filter(s => s.id !== id))
-    setAvailableServices(availableServices.filter(s => s.id !== id))
+    setPersistedMyServices(persistedMyServices.filter(s => s.id !== id))
+    setPersistedServices(persistedServices.filter(s => s.id !== id))
     setShowDeleteConfirm(null)
+    showToastMessage(t.serviceDeleted, "success")
   }
 
-  const filteredServices = availableServices.filter((service) => {
-    const matchesSearch = service.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      service.provider.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filtrer les services avec debounce
+  const filteredServices = persistedServices.filter((service) => {
+    const matchesSearch = service.title.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      service.description.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      service.provider.name.toLowerCase().includes(debouncedSearch.toLowerCase())
     const matchesCategory = selectedCategory === "all" || service.category === selectedCategory
     return matchesSearch && matchesCategory
   })
 
-  const totalRevenue = myServices.reduce((sum, s) => sum + s.earnings, 0)
-  const totalBookings = myServices.reduce((sum, s) => sum + s.bookings, 0)
-  const avgRating = myServices.reduce((sum, s) => sum + s.rating, 0) / (myServices.length || 1)
+  const totalRevenue = persistedMyServices.reduce((sum, s) => sum + s.earnings, 0)
+  const totalBookings = persistedMyServices.reduce((sum, s) => sum + s.bookings, 0)
+  const avgRating = persistedMyServices.reduce((sum, s) => sum + s.rating, 0) / (persistedMyServices.length || 1)
 
   return (
     <div className="space-y-6">
+      {/* Toast notification */}
+      {showToast && (
+        <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-300">
+          <div className={`rounded-lg p-3 flex items-center justify-between shadow-lg ${
+            toastType === "success" ? "bg-green-600" : toastType === "error" ? "bg-red-600" : "bg-blue-600"
+          } text-white`}>
+            <div className="flex items-center gap-2">
+              {toastType === "success" && <CheckCircle className="h-5 w-5" />}
+              {toastType === "error" && <AlertTriangle className="h-5 w-5" />}
+              {toastType === "info" && <InfoIcon className="h-5 w-5" />}
+              <span>{toastMessage}</span>
+            </div>
+            <button onClick={() => setShowToast(false)}><X className="h-5 w-5" /></button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Briefcase className="h-6 w-6 text-green-600" />
             <h2 className="text-2xl font-bold">{t.title}</h2>
+            {!isOnline && (
+              <Badge className="bg-yellow-500 text-white text-xs gap-1 ml-2">
+                <WifiOff className="h-3 w-3" />
+                {t.offline}
+              </Badge>
+            )}
           </div>
           <p className="text-gray-500 mt-1">{t.subtitle} - {userRegion}</p>
         </div>
         <Dialog open={showCreateService} onOpenChange={setShowCreateService}>
           <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700 gap-2">
+            <Button className="bg-green-600 hover:bg-green-700 gap-2" disabled={!isOnline}>
               <Plus className="h-4 w-4" />
               {t.createService}
             </Button>
@@ -653,6 +725,9 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
                 <Pi className="h-4 w-4" />
                 {t.createService}
               </Button>
+              {!isOnline && (
+                <p className="text-xs text-red-500 text-center">⚠️ Connexion internet requise pour créer un service</p>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -721,7 +796,7 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
                     <p className="text-xs text-gray-500 mb-2 line-clamp-2">{service.description}</p>
                     <div className="flex flex-wrap gap-1 mb-3">{service.tags.map((tag, i) => (<Badge key={i} variant="outline" className="text-xs">{tag}</Badge>))}</div>
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-3"><div className="flex items-center gap-1"><Clock className="h-3 w-3" />{service.duration}</div><div className="flex items-center gap-1"><Users className="h-3 w-3" />{service.bookings} {t.reservations}</div></div>
-                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Pi className="h-4 w-4 text-purple-600" /><span className="text-lg font-bold text-purple-600">{service.price} π</span></div><div className="flex gap-2"><Button size="sm" variant="outline" className="h-8"><MessageSquare className="h-3 w-3" /></Button><Button size="sm" disabled={service.availability !== "available"} className="bg-purple-600 hover:bg-purple-700 h-8">{t.bookNow}</Button></div></div>
+                    <div className="flex items-center justify-between"><div className="flex items-center gap-1"><Pi className="h-4 w-4 text-purple-600" /><span className="text-lg font-bold text-purple-600">{service.price} π</span></div><div className="flex gap-2"><Button size="sm" variant="outline" className="h-8"><MessageSquare className="h-3 w-3" /></Button><Button size="sm" disabled={service.availability !== "available" || !isOnline} className="bg-purple-600 hover:bg-purple-700 h-8">{t.bookNow}</Button></div></div>
                   </CardContent>
                 </Card>
               ))}
@@ -731,11 +806,11 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
 
         {/* Onglet Mes services */}
         <TabsContent value="my-services" className="space-y-4 mt-6">
-          {myServices.length === 0 ? (
-            <Card><CardContent className="p-8 text-center"><Briefcase className="h-12 w-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">{t.noMyServices}</p><Button className="mt-4" onClick={() => setShowCreateService(true)}><Plus className="h-4 w-4 mr-2" />{t.createFirstService}</Button></CardContent></Card>
+          {persistedMyServices.length === 0 ? (
+            <Card><CardContent className="p-8 text-center"><Briefcase className="h-12 w-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">{t.noMyServices}</p><Button className="mt-4" onClick={() => setShowCreateService(true)} disabled={!isOnline}><Plus className="h-4 w-4 mr-2" />{t.createFirstService}</Button></CardContent></Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myServices.map((service) => (
+              {persistedMyServices.map((service) => (
                 <Card key={service.id}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3"><h3 className="font-semibold">{service.title}</h3><div className="flex gap-1"><Button size="sm" variant="ghost" className="h-7 w-7 p-0"><Edit className="h-3 w-3" /></Button><Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setShowDeleteConfirm(service.id)}><Trash2 className="h-3 w-3" /></Button></div></div>
@@ -763,7 +838,7 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
             <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold text-purple-600">94%</div><div className="text-xs text-gray-500">{t.satisfactionRate}</div></CardContent></Card>
           </div>
 
-          <Card><CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />{t.servicePerformance}</CardTitle></CardHeader><CardContent><div className="space-y-3">{myServices.map((service) => (<div key={service.id} className="p-3 bg-gray-50 rounded-lg"><div className="flex items-center justify-between mb-2"><h4 className="font-medium text-sm">{service.title}</h4><div className="flex items-center gap-1"><Star className="h-3 w-3 text-yellow-400 fill-current" /><span>{service.rating}</span></div></div><div className="grid grid-cols-3 gap-2 text-xs"><div><span className="text-gray-500">{t.bookingsCount}:</span><span className="font-medium ml-1">{service.bookings}</span></div><div><span className="text-gray-500">{t.earnings}:</span><span className="font-medium ml-1 text-green-600">{service.earnings} π</span></div><div><span className="text-gray-500">{t.avgPrice}:</span><span className="font-medium ml-1 text-purple-600">{service.price} π</span></div></div></div>))}</div></CardContent></Card>
+          <Card><CardHeader><CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />{t.servicePerformance}</CardTitle></CardHeader><CardContent><div className="space-y-3">{persistedMyServices.map((service) => (<div key={service.id} className="p-3 bg-gray-50 rounded-lg"><div className="flex items-center justify-between mb-2"><h4 className="font-medium text-sm">{service.title}</h4><div className="flex items-center gap-1"><Star className="h-3 w-3 text-yellow-400 fill-current" /><span>{service.rating}</span></div></div><div className="grid grid-cols-3 gap-2 text-xs"><div><span className="text-gray-500">{t.bookingsCount}:</span><span className="font-medium ml-1">{service.bookings}</span></div><div><span className="text-gray-500">{t.earnings}:</span><span className="font-medium ml-1 text-green-600">{service.earnings} π</span></div><div><span className="text-gray-500">{t.avgPrice}:</span><span className="font-medium ml-1 text-purple-600">{service.price} π</span></div></div></div>))}</div></CardContent></Card>
         </TabsContent>
       </Tabs>
 
@@ -778,3 +853,10 @@ export default function ServiceManagement({ currentLanguage, userRegion }: Servi
     </div>
   )
 }
+
+// Icône Info
+const InfoIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
