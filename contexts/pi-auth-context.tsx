@@ -233,7 +233,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       setUserData(null);
       setIsAuthenticated(false);
       setError(null);
-      setApiAuthToken(null);
+      removeApiAuthToken();
       saveToken(null, null);
       setAuthMessage("Déconnecté");
       console.log("✅ Utilisateur déconnecté");
