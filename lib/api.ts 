@@ -1,0 +1,323 @@
+/**
+ * API Client - Version simplifiée et optimisée
+ * 
+ * Fonctionnalités :
+ * - Gestion d'authentification (token)
+ * - Timeout configurable
+ * - Retry automatique (optionnel)
+ * - Cache pour les requêtes GET
+ * - File d'attente offline
+ * - Messages d'erreur multilingues
+ */
+
+type FetchResponse<T> = {
+  data: T;
+  status: number;
+  statusText: string;
+  headers: Headers;
+};
+
+export interface ApiError<T = unknown> extends Error {
+  status: number;
+  data: T;
+  isNetworkError?: boolean;
+  isTimeout?: boolean;
+}
+
+// Configuration globale
+let authToken: string | null = null;
+let baseURL: string = "";
+let timeout: number = 30000;
+let maxRetries: number = 2;
+let enableCache: boolean = true;
+let enableOfflineQueue: boolean = true;
+let currentLang: string = "fr";
+
+// Cache des requêtes GET
+const requestCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+
+// File d'attente offline
+let offlineQueue: Array<{
+  id: string;
+  url: string;
+  method: string;
+  body?: any;
+  resolve: (value: any) => void;
+  reject: (reason: any) => void;
+  retryCount: number;
+}> = [];
+
+// Messages d'erreur par langue
+const errorMessages = {
+  fr: {
+    network: "Erreur réseau. Vérifiez votre connexion.",
+    timeout: "La requête a expiré. Veuillez réessayer.",
+    unauthorized: "Session expirée. Veuillez vous reconnecter.",
+    server: "Erreur serveur. Veuillez réessayer plus tard.",
+    unknown: "Une erreur inattendue est survenue.",
+    offline: "Vous êtes hors ligne. La requête sera envoyée automatiquement.",
+  },
+  en: {
+    network: "Network error. Please check your connection.",
+    timeout: "Request timeout. Please try again.",
+    unauthorized: "Session expired. Please log in again.",
+    server: "Server error. Please try again later.",
+    unknown: "An unexpected error occurred.",
+    offline: "You are offline. The request will be sent automatically.",
+  },
+  es: {
+    network: "Error de red. Verifique su conexión.",
+    timeout: "Tiempo de espera agotado. Intente de nuevo.",
+    unauthorized: "Sesión expirada. Inicie sesión nuevamente.",
+    server: "Error del servidor. Intente más tarde.",
+    unknown: "Ocurrió un error inesperado.",
+    offline: "Está desconectado. La solicitud se enviará automáticamente.",
+  },
+  pt: {
+    network: "Erro de rede. Verifique sua conexão.",
+    timeout: "Tempo limite excedido. Tente novamente.",
+    unauthorized: "Sessão expirada. Faça login novamente.",
+    server: "Erro no servidor. Tente mais tarde.",
+    unknown: "Ocorreu um erro inesperado.",
+    offline: "Você está offline. A solicitação será enviada automaticamente.",
+  },
+};
+
+// ============ Configuration ============
+export const setApiAuthToken = (token: string) => {
+  authToken = token;
+};
+
+export const removeApiAuthToken = () => {
+  authToken = null;
+};
+
+export const setBaseURL = (url: string) => {
+  baseURL = url;
+};
+
+export const setGlobalTimeout = (ms: number) => {
+  timeout = ms;
+};
+
+export const setApiLanguage = (lang: string) => {
+  if (errorMessages[lang as keyof typeof errorMessages]) {
+    currentLang = lang;
+  }
+};
+
+// ============ Utilitaires ============
+const getErrorMessage = (status: number, type: string): string => {
+  const messages = errorMessages[currentLang as keyof typeof errorMessages] || errorMessages.fr;
+  
+  const errorMap: Record<number, string> = {
+    0: messages.network,
+    401: messages.unauthorized,
+    500: messages.server,
+    502: messages.server,
+    503: messages.server,
+  };
+  
+  return errorMap[status] || messages[type as keyof typeof messages] || messages.unknown;
+};
+
+const buildUrl = (url: string): string => {
+  if (url.startsWith("http")) return url;
+  return baseURL ? `${baseURL}${url}` : url;
+};
+
+const getCacheKey = (method: string, url: string, body?: any): string => {
+  return `${method}:${url}:${body ? JSON.stringify(body) : ""}`;
+};
+
+// Traitement de la file d'attente offline
+const processOfflineQueue = () => {
+  if (offlineQueue.length === 0) return;
+  
+  const queue = [...offlineQueue];
+  offlineQueue = [];
+  
+  queue.forEach(req => {
+    request(req.url, { method: req.method, body: req.body })
+      .then(req.resolve)
+      .catch(req.reject);
+  });
+};
+
+// Écouter le retour en ligne
+if (typeof window !== "undefined") {
+  window.addEventListener("online", processOfflineQueue);
+}
+
+// ============ Requête principale ============
+async function request<T = any>(
+  url: string,
+  options: RequestInit & { skipCache?: boolean; retryCount?: number } = {}
+): Promise<FetchResponse<T>> {
+  const method = options.method || "GET";
+  const fullUrl = buildUrl(url);
+  const isReadOnly = method === "GET";
+  const cacheKey = getCacheKey(method, url, options.body);
+  
+  // Vérifier le cache pour GET
+  if (isReadOnly && enableCache && !options.skipCache) {
+    const cached = requestCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      return {
+        data: cached.data as T,
+        status: 200,
+        statusText: "OK (cached)",
+        headers: new Headers(),
+      };
+    }
+  }
+  
+  // Mode hors ligne : mettre en queue pour les requêtes non-GET
+  if (typeof navigator !== "undefined" && !navigator.onLine && enableOfflineQueue && !isReadOnly) {
+    return new Promise((resolve, reject) => {
+      offlineQueue.push({
+        id: `${Date.now()}-${Math.random()}`,
+        url,
+        method,
+        body: options.body,
+        resolve,
+        reject,
+        retryCount: 0,
+      });
+      reject(new Error(getErrorMessage(0, "offline")));
+    });
+  }
+  
+  // Construction des headers
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> || {}),
+  };
+  
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  
+  // Timeout et AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  // Gestion des retries
+  const maxAttempts = options.retryCount ?? (isReadOnly ? maxRetries : 1);
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    try {
+      // Délai exponentiel entre les tentatives
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+      }
+      
+      const response = await fetch(fullUrl, {
+        ...options,
+        method,
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Traitement de la réponse
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+      let data: any;
+      
+      if (response.status === 204) {
+        data = null;
+      } else if (isJson) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+      
+      if (!response.ok) {
+        const error = new Error(data?.message || response.statusText) as ApiError<T>;
+        error.status = response.status;
+        error.data = data;
+        throw error;
+      }
+      
+      // Mettre en cache pour GET
+      if (isReadOnly && enableCache) {
+        requestCache.set(cacheKey, {
+          data,
+          timestamp: Date.now(),
+          ttl: 60000, // 1 minute
+        });
+      }
+      
+      return {
+        data: data as T,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      };
+      
+    } catch (error: any) {
+      lastError = error;
+      
+      // Ne pas réessayer pour certaines erreurs
+      if (error.status === 401 || error.status === 403 || error.status === 404) {
+        break;
+      }
+      
+      // Erreur d'abort (timeout)
+      if (error.name === "AbortError") {
+        const timeoutError = new Error(getErrorMessage(408, "timeout")) as ApiError<T>;
+        timeoutError.status = 408;
+        timeoutError.isTimeout = true;
+        lastError = timeoutError;
+        break;
+      }
+    }
+  }
+  
+  clearTimeout(timeoutId);
+  
+  // Formater l'erreur réseau
+  if (!lastError.status) {
+    const networkError = new Error(getErrorMessage(0, "network")) as ApiError<T>;
+    networkError.status = 0;
+    networkError.isNetworkError = true;
+    throw networkError;
+  }
+  
+  throw lastError;
+}
+
+// ============ API Export ============
+export const api = {
+  get: <T = any>(url: string, options?: Omit<RequestInit, "method" | "body">) =>
+    request<T>(url, { ...options, method: "GET" }),
+    
+  post: <T = any>(url: string, body?: any, options?: Omit<RequestInit, "method">) =>
+    request<T>(url, { ...options, method: "POST", body: body ? JSON.stringify(body) : undefined }),
+    
+  put: <T = any>(url: string, body?: any, options?: Omit<RequestInit, "method">) =>
+    request<T>(url, { ...options, method: "PUT", body: body ? JSON.stringify(body) : undefined }),
+    
+  patch: <T = any>(url: string, body?: any, options?: Omit<RequestInit, "method">) =>
+    request<T>(url, { ...options, method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
+    
+  delete: <T = any>(url: string, options?: Omit<RequestInit, "method" | "body">) =>
+    request<T>(url, { ...options, method: "DELETE" }),
+};
+
+// ============ Configuration additionnelle ============
+export const apiConfig = {
+  setBaseURL,
+  setGlobalTimeout,
+  setApiAuthToken,
+  removeApiAuthToken,
+  setApiLanguage,
+  clearCache: () => requestCache.clear(),
+  getOfflineQueueLength: () => offlineQueue.length,
+  clearOfflineQueue: () => { offlineQueue = []; },
+};
+
+export default api;
