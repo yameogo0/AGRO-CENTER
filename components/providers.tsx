@@ -20,7 +20,6 @@ if (typeof window !== "undefined") {
   setBaseURL(API_URL)
   setGlobalTimeout(API_TIMEOUT)
   
-  // Vérifier si apiConfig existe avant d'appeler les méthodes
   if (apiConfig) {
     if (typeof apiConfig.setMaxRetries === 'function') {
       apiConfig.setMaxRetries(MAX_RETRIES)
@@ -30,7 +29,6 @@ if (typeof window !== "undefined") {
     }
   }
   
-  // Log configuration en développement
   if (process.env.NODE_ENV === "development") {
     console.log("🔧 API Configuration:", {
       baseURL: API_URL,
@@ -45,11 +43,6 @@ interface ProvidersProps {
   children: ReactNode
 }
 
-// Props pour AuthLoadingScreen
-interface AuthLoadingScreenProps {
-  language?: string
-}
-
 // Composant d'initialisation
 function AppInitializer({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -58,7 +51,6 @@ function AppInitializer({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Récupérer la langue sauvegardée
         const savedLanguage = localStorage.getItem("language") || "fr"
         setLanguage(savedLanguage)
         
@@ -66,27 +58,23 @@ function AppInitializer({ children }: { children: ReactNode }) {
           setApiLanguage(savedLanguage)
         }
         
-        // Récupérer le thème sauvegardé
         const savedTheme = localStorage.getItem("theme")
         if (savedTheme === "dark") {
           document.documentElement.classList.add("dark")
         } else if (savedTheme === "light") {
           document.documentElement.classList.remove("dark")
         } else {
-          // Détection du thème système
           const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
           if (systemDark) {
             document.documentElement.classList.add("dark")
           }
         }
 
-        // Simuler un temps de chargement minimal
         await new Promise(resolve => setTimeout(resolve, 500))
-        
         setIsInitialized(true)
       } catch (error) {
         console.error("Erreur lors de l'initialisation:", error)
-        setIsInitialized(true) // Continuer même en cas d'erreur
+        setIsInitialized(true)
       }
     }
 
@@ -169,15 +157,12 @@ function GlobalErrorBoundary({ children }: { children: ReactNode }) {
 function ConnectionProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true)
   const [showOfflineToast, setShowOfflineToast] = useState(false)
-  const [isReconnecting, setIsReconnecting] = useState(false)
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
-      setIsReconnecting(false)
       setShowOfflineToast(false)
       
-      // Notification de reconnexion
       const toast = document.createElement('div')
       toast.className = 'fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-300'
       toast.innerHTML = `
@@ -218,9 +203,6 @@ function ConnectionProvider({ children }: { children: ReactNode }) {
               <span className="text-lg">📡</span>
               <span>Connexion internet perdue. Mode hors ligne actif.</span>
             </div>
-            {isReconnecting && (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            )}
           </div>
         </div>
       )}
