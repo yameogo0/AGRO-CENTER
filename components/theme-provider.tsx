@@ -1,8 +1,10 @@
 "use client"
 
-import { ReactNode, useState, useEffect, createContext, useContext } from "react"
-import { ThemeProvider } from "@/components/ui/theme-provider"
-import { LanguageProvider } from "@/components/ui/language-manager"
+import { ReactNode, useState, useEffect, createContext, useContext, useCallback } from "react"
+
+interface ProvidersProps {
+  children: ReactNode
+}
 
 // Types pour le contexte global
 interface AppContextType {
@@ -22,29 +24,56 @@ export const useApp = () => {
 }
 
 // Composant d'écran de chargement
-function GlobalLoadingScreen() {
+function GlobalLoadingScreen({ message }: { message?: string }) {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress(prev => Math.min(prev + Math.random() * 20, 100))
+    }, 200)
+    return () => clearInterval(interval)
+  }, [])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-      <div className="text-center">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-4">
+      <div className="text-center max-w-sm w-full">
         <div className="relative">
           <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
             <span className="text-4xl text-white animate-pulse">🌾</span>
           </div>
-          <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-xs animate-bounce">
+          <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-xs font-bold text-white animate-bounce">
             π
           </div>
+          <div className="absolute -bottom-2 -left-2 w-5 h-5 bg-green-400 rounded-full animate-ping" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">AGRO MULTICENTER HINOS</h2>
-        <p className="text-gray-500 text-sm">Chargement de votre plateforme agricole...</p>
+        <h2 className="text-xl font-bold bg-gradient-to-r from-green-700 to-blue-700 bg-clip-text text-transparent mb-2">
+          AGRO MULTICENTER HINOS
+        </h2>
+        <p className="text-gray-500 text-sm">{message || "Chargement de votre plateforme agricole..."}</p>
+        
+        {/* Barre de progression */}
+        <div className="mt-6 w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          >
+            <div className="absolute inset-0 bg-white/20 animate-[shimmer_1.5s_infinite]" />
+          </div>
+        </div>
+
+        {/* Points d'animation */}
         <div className="flex justify-center gap-2 mt-4">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }}></div>
-          <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }}></div>
-          <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: "0.45s" }}></div>
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="w-2 h-2 rounded-full bg-green-400 animate-bounce"
+              style={{ animationDelay: `${i * 0.15}s`, animationDuration: "0.6s" }}
+            />
+          ))}
         </div>
-        <div className="mt-6 w-48 mx-auto h-1 bg-gray-200 rounded-full overflow-hidden">
-          <div className="h-full w-1/3 bg-gradient-to-r from-green-500 to-blue-600 rounded-full animate-progress"></div>
-        </div>
+
+        {/* Version */}
+        <p className="text-[10px] text-gray-400 mt-6">Version 2.1.0 • © 2024</p>
       </div>
     </div>
   )
@@ -60,6 +89,7 @@ function PerformanceDetector({ children }: { children: ReactNode }) {
       // Vérifier la mémoire disponible
       const memory = (performance as any).memory
       if (memory && memory.jsHeapSizeLimit < 500 * 1024 * 1024) {
+        console.log("⚠️ Mode basse performance activé (mémoire limitée)")
         setIsLowPerfMode(true)
         return
       }
@@ -67,6 +97,7 @@ function PerformanceDetector({ children }: { children: ReactNode }) {
       // Vérifier le nombre de cores CPU
       const cores = navigator.hardwareConcurrency
       if (cores && cores <= 2) {
+        console.log("⚠️ Mode basse performance activé (CPU limité)")
         setIsLowPerfMode(true)
         return
       }
@@ -74,6 +105,7 @@ function PerformanceDetector({ children }: { children: ReactNode }) {
       // Vérifier la connexion réseau
       const connection = (navigator as any).connection
       if (connection && connection.effectiveType === "2g") {
+        console.log("⚠️ Mode basse performance activé (réseau lent)")
         setIsLowPerfMode(true)
         return
       }
@@ -95,10 +127,16 @@ function PerformanceDetector({ children }: { children: ReactNode }) {
     }
   }, [isLowPerfMode])
 
-  if (!mounted) return <GlobalLoadingScreen />
+  if (!mounted) return <GlobalLoadingScreen message="Analyse des performances..." />
 
   return (
-    <AppContext.Provider value={{ isOnline: true, apiStatus: "connected", appVersion: "2.0.0", isLowPerfMode, setLowPerfMode: setIsLowPerfMode }}>
+    <AppContext.Provider value={{ 
+      isOnline: true, 
+      apiStatus: "connected", 
+      appVersion: "2.1.0", 
+      isLowPerfMode, 
+      setLowPerfMode: setIsLowPerfMode 
+    }}>
       {children}
     </AppContext.Provider>
   )
@@ -109,10 +147,29 @@ function ConnectionDetector({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true)
   const [apiStatus, setApiStatus] = useState<"connected" | "disconnected" | "checking">("checking")
   const [mounted, setMounted] = useState(false)
+  const [offlineMode, setOfflineMode] = useState(false)
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
+    const handleOnline = () => {
+      setIsOnline(true)
+      setOfflineMode(false)
+      // Notification de reconnexion
+      const toast = document.createElement('div')
+      toast.className = 'fixed bottom-4 right-4 bg-green-500 text-white rounded-lg p-3 shadow-lg z-50 animate-in slide-in-from-right-5'
+      toast.innerHTML = '✅ Connexion rétablie'
+      document.body.appendChild(toast)
+      setTimeout(() => toast.remove(), 3000)
+    }
+    
+    const handleOffline = () => {
+      setIsOnline(false)
+      // Notification de déconnexion
+      const toast = document.createElement('div')
+      toast.className = 'fixed bottom-4 right-4 bg-yellow-500 text-white rounded-lg p-3 shadow-lg z-50 animate-in slide-in-from-right-5'
+      toast.innerHTML = '📡 Connexion perdue - Mode hors ligne'
+      document.body.appendChild(toast)
+      setTimeout(() => toast.remove(), 4000)
+    }
     
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
@@ -136,6 +193,7 @@ function ConnectionDetector({ children }: { children: ReactNode }) {
     
     checkApi()
     const interval = setInterval(checkApi, 30000)
+    setIsOnline(navigator.onLine)
     setMounted(true)
     
     return () => {
@@ -145,18 +203,26 @@ function ConnectionDetector({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  if (!mounted) return <GlobalLoadingScreen />
+  const handleOfflineMode = () => {
+    setOfflineMode(true)
+    setApiStatus("connected")
+  }
 
-  if (!isOnline) {
+  if (!mounted) return <GlobalLoadingScreen message="Vérification de la connexion..." />
+
+  if (!isOnline && !offlineMode) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <span className="text-4xl">📡</span>
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">Pas de connexion internet</h2>
-          <p className="text-gray-500 text-sm mb-5">
+          <p className="text-gray-500 text-sm mb-2">
             Vérifiez votre connexion et réessayez pour accéder à Agro Multicenter Hinos.
+          </p>
+          <p className="text-xs text-gray-400 mb-5">
+            Mode hors ligne: données limitées, synchronisation différée.
           </p>
           <div className="flex gap-3">
             <button
@@ -166,10 +232,10 @@ function ConnectionDetector({ children }: { children: ReactNode }) {
               🔄 Réessayer
             </button>
             <button
-              onClick={() => setIsOnline(true)}
+              onClick={handleOfflineMode}
               className="flex-1 border border-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
             >
-              Mode hors ligne
+              📱 Mode hors ligne
             </button>
           </div>
         </div>
@@ -177,23 +243,34 @@ function ConnectionDetector({ children }: { children: ReactNode }) {
     )
   }
 
-  if (apiStatus === "disconnected") {
+  if (apiStatus === "disconnected" && !offlineMode) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <span className="text-4xl">⚠️</span>
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">Service temporairement indisponible</h2>
-          <p className="text-gray-500 text-sm mb-5">
-            Nos serveurs sont momentanément indisponibles. Veuillez réessayer dans quelques instants.
+          <p className="text-gray-500 text-sm mb-2">
+            Nos serveurs sont momentanément indisponibles.
           </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="bg-green-600 text-white py-2.5 px-6 rounded-xl font-medium hover:bg-green-700 transition-colors"
-          >
-            🔄 Réessayer
-          </button>
+          <p className="text-xs text-gray-400 mb-5">
+            Vous pouvez continuer en mode hors ligne avec les données en cache.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="flex-1 bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition-colors"
+            >
+              🔄 Réessayer
+            </button>
+            <button
+              onClick={() => setApiStatus("connected")}
+              className="flex-1 border border-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+            >
+              📱 Mode hors ligne
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -235,10 +312,15 @@ function ErrorBoundary({ children }: { children: ReactNode }) {
     window.location.reload()
   }
 
+  const handleIgnore = () => {
+    setHasError(false)
+    setError(null)
+  }
+
   if (hasError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <span className="text-4xl">🐛</span>
           </div>
@@ -246,7 +328,7 @@ function ErrorBoundary({ children }: { children: ReactNode }) {
           <p className="text-gray-500 text-sm mb-4">
             L'application a rencontré un problème inattendu.
           </p>
-          {error && (
+          {error && process.env.NODE_ENV === "development" && (
             <pre className="bg-gray-100 p-3 rounded-xl text-xs text-left overflow-auto max-h-32 mb-5 font-mono">
               {error.message}
             </pre>
@@ -259,7 +341,7 @@ function ErrorBoundary({ children }: { children: ReactNode }) {
               🔄 Recharger l'application
             </button>
             <button
-              onClick={() => setHasError(false)}
+              onClick={handleIgnore}
               className="flex-1 border border-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
             >
               Ignorer
@@ -276,49 +358,35 @@ function ErrorBoundary({ children }: { children: ReactNode }) {
 // Composant de préchargement des ressources
 function ResourcePreloader({ children }: { children: ReactNode }) {
   const [isReady, setIsReady] = useState(false)
+  const [progress, setProgress] = useState(0)
 
   useEffect(() => {
     const preloadResources = async () => {
-      // Simuler un chargement minimal
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // Simuler le chargement des ressources
+      const steps = [
+        { name: "Initialisation", duration: 300 },
+        { name: "Chargement des modules", duration: 400 },
+        { name: "Connexion aux services", duration: 300 },
+      ]
+      
+      let currentProgress = 0
+      for (const step of steps) {
+        await new Promise(resolve => setTimeout(resolve, step.duration))
+        currentProgress += 100 / steps.length
+        setProgress(currentProgress)
+      }
+      
       setIsReady(true)
     }
     
     preloadResources()
   }, [])
 
-  if (!isReady) return <GlobalLoadingScreen />
-
-  return <>{children}</>
-}
-
-// Export du provider principal
-export function Providers({ children }: ProvidersProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return <GlobalLoadingScreen />
+  if (!isReady) {
+    return <GlobalLoadingScreen message={`Chargement des ressources... ${Math.round(progress)}%`} />
   }
 
-  return (
-    <ErrorBoundary>
-      <PerformanceDetector>
-        <ConnectionDetector>
-          <ResourcePreloader>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              <LanguageProvider>
-                {children}
-              </LanguageProvider>
-            </ThemeProvider>
-          </ResourcePreloader>
-        </ConnectionDetector>
-      </PerformanceDetector>
-    </ErrorBoundary>
-  )
+  return <>{children}</>
 }
 
 // Composant LanguageProvider simplifié
@@ -348,11 +416,40 @@ function LanguageProvider({ children }: { children: ReactNode }) {
     }
   }, [language, mounted])
 
-  if (!mounted) return <GlobalLoadingScreen />
+  if (!mounted) return <GlobalLoadingScreen message="Configuration de la langue..." />
 
   return (
     <div data-language={language}>
       {children}
     </div>
+  )
+}
+
+// Export du provider principal
+export function Providers({ children }: ProvidersProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return <GlobalLoadingScreen message="Démarrage de l'application..." />
+  }
+
+  return (
+    <ErrorBoundary>
+      <PerformanceDetector>
+        <ConnectionDetector>
+          <ResourcePreloader>
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem storageKey="agro-theme">
+              <LanguageProvider>
+                {children}
+              </LanguageProvider>
+            </ThemeProvider>
+          </ResourcePreloader>
+        </ConnectionDetector>
+      </PerformanceDetector>
+    </ErrorBoundary>
   )
 }
