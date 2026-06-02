@@ -1,17 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { usePiAuth } from "@/contexts/pi-auth-context";
-import { Loader2, Wifi, WifiOff, Pi } from "lucide-react";
+import { Loader2, Wifi, WifiOff, Pi, CheckCircle, AlertCircle } from "lucide-react";
 
 interface AppWrapperProps {
   children: ReactNode;
   language?: string;
 }
 
-// Traductions
+// Traductions complètes
 const translations = {
   fr: {
     loading: "Chargement de votre espace agricole...",
@@ -23,6 +23,10 @@ const translations = {
     piRequired: "Veuillez ouvrir cette application dans le navigateur Pi Network",
     retry: "Réessayer",
     continueOffline: "Continuer hors ligne",
+    continueDemo: "Continuer (mode démo)",
+    welcome: "Bienvenue sur Agro Multicenter",
+    checkingAuth: "Vérification de l'authentification...",
+    almostThere: "Plus qu'un instant...",
   },
   en: {
     loading: "Loading your agricultural space...",
@@ -34,6 +38,10 @@ const translations = {
     piRequired: "Please open this application in Pi Network browser",
     retry: "Retry",
     continueOffline: "Continue offline",
+    continueDemo: "Continue (demo mode)",
+    welcome: "Welcome to Agro Multicenter",
+    checkingAuth: "Checking authentication...",
+    almostThere: "Almost there...",
   },
   es: {
     loading: "Cargando su espacio agrícola...",
@@ -45,6 +53,10 @@ const translations = {
     piRequired: "Por favor, abra esta aplicación en el navegador Pi Network",
     retry: "Reintentar",
     continueOffline: "Continuar sin conexión",
+    continueDemo: "Continuar (modo demo)",
+    welcome: "Bienvenido a Agro Multicenter",
+    checkingAuth: "Verificando autenticación...",
+    almostThere: "Casi listo...",
   },
   pt: {
     loading: "Carregando seu espaço agrícola...",
@@ -56,82 +68,95 @@ const translations = {
     piRequired: "Por favor, abra este aplicativo no navegador Pi Network",
     retry: "Tentar novamente",
     continueOffline: "Continuar offline",
+    continueDemo: "Continuar (modo demo)",
+    welcome: "Bem-vindo ao Agro Multicenter",
+    checkingAuth: "Verificando autenticação...",
+    almostThere: "Quase pronto...",
   },
 };
 
 // Étapes de chargement
 const loadingSteps = [
-  { key: "initializing", duration: 800, progress: 20 },
-  { key: "connectingPi", duration: 1200, progress: 40 },
-  { key: "loadingData", duration: 1000, progress: 70 },
-  { key: "almostReady", duration: 800, progress: 100 },
+  { key: "initializing", duration: 600, progress: 15 },
+  { key: "checkingAuth", duration: 800, progress: 35 },
+  { key: "connectingPi", duration: 1000, progress: 55 },
+  { key: "loadingData", duration: 800, progress: 80 },
+  { key: "almostReady", duration: 600, progress: 100 },
 ];
 
 export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
   const [isReady, setIsReady] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [showOfflineWarning, setShowOfflineWarning] = useState(false);
   const [showPiWarning, setShowPiWarning] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState("initializing");
+  const [hasAutoContinued, setHasAutoContinued] = useState(false);
 
   const isOnline = useOnlineStatus();
   const { isAuthenticated, isLoading: isPiLoading, login, error: piError } = usePiAuth();
 
   const t = translations[language as keyof typeof translations] || translations.fr;
-
-  // Gestion du mode hors ligne
-  useEffect(() => {
-    if (!isOnline && !showOfflineWarning) {
-      setShowOfflineWarning(true);
-    }
-  }, [isOnline, showOfflineWarning]);
+  const currentStep = loadingSteps[currentStepIndex];
 
   // Animation de progression du chargement
   useEffect(() => {
-    if (!isInitializing) return;
+    if (!isInitializing || isReady) return;
 
+    let animationFrameId: number;
     let stepIndex = 0;
+    let startTime = 0;
     let currentProgress = 0;
 
-    const advanceStep = () => {
-      if (stepIndex < loadingSteps.length) {
-        const step = loadingSteps[stepIndex];
-        const startProgress = currentProgress;
-        const endProgress = step.progress;
-        const duration = step.duration;
-        const startTime = Date.now();
+    const animateProgress = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      
+      const elapsed = timestamp - startTime;
+      const step = loadingSteps[stepIndex];
+      
+      if (!step) return;
 
-        const animateProgress = () => {
-          const elapsed = Date.now() - startTime;
-          const newProgress = Math.min(
-            startProgress + (elapsed / duration) * (endProgress - startProgress),
-            endProgress
-          );
-          setProgress(Math.floor(newProgress));
+      const startProgress = currentProgress;
+      const endProgress = step.progress;
+      const duration = step.duration;
+      
+      const newProgress = Math.min(
+        startProgress + (elapsed / duration) * (endProgress - startProgress),
+        endProgress
+      );
+      
+      setProgress(Math.floor(newProgress));
+      setLoadingMessage(step.key);
 
-          if (elapsed < duration) {
-            requestAnimationFrame(animateProgress);
-          } else {
-            setProgress(endProgress);
-            currentProgress = endProgress;
-            stepIndex++;
+      if (elapsed < duration) {
+        animationFrameId = requestAnimationFrame(animateProgress);
+      } else {
+        setProgress(endProgress);
+        currentProgress = endProgress;
+        stepIndex++;
+        setCurrentStepIndex(stepIndex);
 
-            if (stepIndex < loadingSteps.length) {
-              setTimeout(advanceStep, 200);
-            }
-          }
-        };
-
-        requestAnimationFrame(animateProgress);
+        if (stepIndex < loadingSteps.length) {
+          startTime = 0;
+          animationFrameId = requestAnimationFrame(animateProgress);
+        }
       }
     };
 
-    advanceStep();
-  }, [isInitializing]);
+    animationFrameId = requestAnimationFrame(animateProgress);
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [isInitializing, isReady]);
 
   // Vérification de l'authentification Pi
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
     const checkAuth = async () => {
       // Si déjà authentifié, passer directement
       if (isAuthenticated) {
@@ -143,62 +168,88 @@ export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
       // Attendre que le chargement Pi soit terminé
       if (!isPiLoading) {
         // Si erreur Pi (hors Pi Browser)
-        if (piError && piError.includes("Pi Browser")) {
+        if (piError && (piError.includes("Pi Browser") || piError.includes("Pi Network"))) {
           setShowPiWarning(true);
           setIsInitializing(false);
           return;
         }
         
         // Si pas authentifié, laisser l'utilisateur se connecter
+        // mais permettre de continuer après un délai
+        if (!hasAutoContinued) {
+          timeoutId = setTimeout(() => {
+            if (!isAuthenticated && !showPiWarning) {
+              setShowPiWarning(true);
+              setHasAutoContinued(true);
+            }
+          }, 5000);
+        }
+        
         setIsInitializing(false);
         setIsReady(true);
       }
     };
 
     checkAuth();
-  }, [isAuthenticated, isPiLoading, piError]);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [isAuthenticated, isPiLoading, piError, hasAutoContinued]);
 
   // Forcer l'initialisation après un certain temps
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (isInitializing) {
+      if (isInitializing && !isReady) {
         setIsInitializing(false);
         setIsReady(true);
       }
-    }, 10000); // 10 secondes max
+    }, 12000); // 12 secondes max
 
     return () => clearTimeout(timeout);
-  }, [isInitializing]);
+  }, [isInitializing, isReady]);
 
-  const handleRetry = () => {
+  // Gestion du mode hors ligne
+  useEffect(() => {
+    if (!isOnline && !showOfflineWarning && isReady) {
+      setShowOfflineWarning(true);
+    }
+  }, [isOnline, showOfflineWarning, isReady]);
+
+  const handleRetry = useCallback(() => {
     window.location.reload();
-  };
+  }, []);
 
-  const handleContinueOffline = () => {
+  const handleContinueOffline = useCallback(() => {
     setShowOfflineWarning(false);
-    setIsInitializing(false);
     setIsReady(true);
-  };
+  }, []);
 
-  const handleContinueWithoutPi = () => {
+  const handleContinueWithoutPi = useCallback(async () => {
     setShowPiWarning(false);
     setIsReady(true);
-  };
+    // Tenter une connexion anonyme ou en mode démo
+    try {
+      await login();
+    } catch (err) {
+      console.warn("Demo mode:", err);
+    }
+  }, [login]);
 
-  // Écran de chargement
+  // Écran de chargement principal
   if (isInitializing && !isReady) {
-    const currentMessage = loadingSteps[currentStep]?.key || "initializing";
+    const stepMessage = currentStep?.key || "initializing";
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-green-100">
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-green-100 animate-fade-in">
             {/* Logo animé */}
             <div className="flex justify-center mb-6">
               <div className="relative">
-                <div className="absolute inset-0 bg-green-500/20 rounded-full blur-xl" />
-                <div className="relative w-20 h-20 bg-gradient-to-br from-green-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
-                  <span className="text-3xl">🌾</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-blue-500/20 rounded-full blur-xl animate-pulse" />
+                <div className="relative w-20 h-20 bg-gradient-to-br from-green-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <span className="text-3xl animate-bounce-subtle">🌾</span>
                 </div>
                 <div className="absolute -inset-1">
                   <div className="w-24 h-24 rounded-full border-4 border-green-500/20" />
@@ -212,41 +263,52 @@ export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
               <h2 className="text-2xl font-bold bg-gradient-to-r from-green-700 to-blue-700 bg-clip-text text-transparent">
                 AGRO MULTICENTER HINOS
               </h2>
-              <p className="text-gray-500 text-sm mt-1">{t[t.currentMessage as keyof typeof t] || t.loading}</p>
+              <p className="text-gray-500 text-sm mt-1 animate-pulse">
+                {t[stepMessage as keyof typeof t] || t.loading}
+              </p>
             </div>
 
             {/* Barre de progression */}
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{t[loadingSteps[currentStep]?.key as keyof typeof t] || t.initializing}</span>
+                <span className="text-gray-600 flex items-center gap-2">
+                  {progress < 100 && (
+                    <Loader2 className="h-3 w-3 animate-spin text-green-500" />
+                  )}
+                  {progress >= 100 && (
+                    <CheckCircle className="h-3 w-3 text-green-500" />
+                  )}
+                  {t[stepMessage as keyof typeof t] || t.initializing}
+                </span>
                 <span className="text-green-600 font-medium">{progress}%</span>
               </div>
               <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300 ease-out"
+                  className="h-full bg-gradient-to-r from-green-500 to-blue-600 rounded-full transition-all duration-300 ease-out relative overflow-hidden"
                   style={{ width: `${progress}%` }}
                 >
-                  <div className="absolute inset-0 bg-white/20 animate-[shimmer_1.5s_infinite]" />
+                  <div className="absolute inset-0 bg-white/30 animate-[shimmer_1.5s_infinite]" />
                 </div>
               </div>
             </div>
 
             {/* Points d'animation */}
             <div className="flex justify-center gap-2 mt-6">
-              {[0, 1, 2].map((i) => (
+              {loadingSteps.map((step, i) => (
                 <div
-                  key={i}
-                  className={`w-2 h-2 rounded-full bg-green-400 transition-all duration-300 ${
-                    progress > i * 33 ? 'opacity-100 scale-100' : 'opacity-30 scale-75'
+                  key={step.key}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    progress >= step.progress 
+                      ? 'bg-green-500 opacity-100 scale-100' 
+                      : 'bg-gray-300 opacity-50 scale-75'
                   }`}
-                  style={{ animationDelay: `${i * 150}ms` }}
                 />
               ))}
             </div>
 
             {/* Version */}
             <div className="text-center mt-6 pt-4 border-t border-gray-100">
-              <p className="text-xs text-gray-400">Version 2.0.0 • © 2024 Agro Multicenter Hinos</p>
+              <p className="text-xs text-gray-400">Version 2.1.0 • © 2024 Agro Multicenter Hinos</p>
             </div>
           </div>
         </div>
@@ -255,16 +317,17 @@ export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
   }
 
   // Avertissement hors ligne
-  if (showOfflineWarning) {
+  if (showOfflineWarning && !isOnline) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <WifiOff className="h-10 w-10 text-yellow-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">⚠️ {t.offline}</h2>
           <p className="text-gray-500 text-sm mb-6">
             Certaines fonctionnalités peuvent être limitées sans connexion internet.
+            Vos données seront synchronisées automatiquement lors du retour de la connexion.
           </p>
           <div className="flex gap-3">
             <button
@@ -289,27 +352,34 @@ export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
   if (showPiWarning) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-6 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-5">
             <Pi className="h-10 w-10 text-purple-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">π {t.piRequired}</h2>
           <p className="text-gray-500 text-sm mb-6">
-            Pour utiliser toutes les fonctionnalités de paiement et d'authentification, veuillez ouvrir cette application dans le navigateur Pi Network.
+            Pour utiliser toutes les fonctionnalités de paiement et d'authentification, 
+            veuillez ouvrir cette application dans le navigateur Pi Network.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3">
             <button
               onClick={handleRetry}
-              className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-medium hover:bg-purple-700 transition-colors"
+              className="w-full bg-purple-600 text-white py-2.5 rounded-xl font-medium hover:bg-purple-700 transition-colors"
             >
               🔄 {t.retry}
             </button>
             <button
               onClick={handleContinueWithoutPi}
-              className="flex-1 border border-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+              className="w-full border border-gray-300 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors"
             >
-              📱 Continuer (mode démo)
+              📱 {t.continueDemo}
             </button>
+          </div>
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Mode démo: certaines fonctionnalités premium sont limitées
+            </p>
           </div>
         </div>
       </div>
@@ -317,4 +387,17 @@ export function AppWrapper({ children, language = "fr" }: AppWrapperProps) {
   }
 
   return <>{children}</>;
+}
+
+// Hook pour accéder à l'état du wrapper
+export function useAppWrapper() {
+  const [isOnline, setIsOnline] = useState(true);
+  const [isPiAvailable, setIsPiAvailable] = useState(false);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    setIsPiAvailable(!!(typeof window !== "undefined" && window.Pi));
+  }, []);
+
+  return { isOnline, isPiAvailable };
 }
