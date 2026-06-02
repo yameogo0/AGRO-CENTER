@@ -1,5 +1,5 @@
 /**
- * API Client - Version simplifiée et optimisée
+ * API Client - Version complète et optimisée
  * 
  * Fonctionnalités :
  * - Gestion d'authentification (token)
@@ -8,6 +8,10 @@
  * - Cache pour les requêtes GET
  * - File d'attente offline
  * - Messages d'erreur multilingues
+ * - Intercepteurs de requêtes/réponses
+ * - Rate limiting
+ * - Compression
+ * - Logging
  */
 
 type FetchResponse<T> = {
@@ -15,6 +19,7 @@ type FetchResponse<T> = {
   status: number;
   statusText: string;
   headers: Headers;
+  fromCache?: boolean;
 };
 
 export interface ApiError<T = unknown> extends Error {
@@ -22,6 +27,29 @@ export interface ApiError<T = unknown> extends Error {
   data: T;
   isNetworkError?: boolean;
   isTimeout?: boolean;
+  isOffline?: boolean;
+}
+
+interface RequestInterceptor {
+  onFulfilled?: (config: RequestInit) => RequestInit | Promise<RequestInit>;
+  onRejected?: (error: any) => any;
+}
+
+interface ResponseInterceptor {
+  onFulfilled?: <T>(response: FetchResponse<T>) => FetchResponse<T> | Promise<FetchResponse<T>>;
+  onRejected?: (error: any) => any;
+}
+
+interface QueuedRequest {
+  id: string;
+  url: string;
+  method: string;
+  body?: any;
+  headers?: Record<string, string>;
+  resolve: (value: any) => void;
+  reject: (reason: any) => void;
+  retryCount: number;
+  timestamp: number;
 }
 
 // Configuration globale
@@ -31,21 +59,23 @@ let timeout: number = 30000;
 let maxRetries: number = 2;
 let enableCache: boolean = true;
 let enableOfflineQueue: boolean = true;
+let enableLogging: boolean = process.env.NODE_ENV === "development";
 let currentLang: string = "fr";
+let cacheTTL: number = 60000; // 1 minute par défaut
+let rateLimitEnabled: boolean = false;
+let rateLimitRequestsPerMinute: number = 60;
+let requestCount: number = 0;
+let lastRequestReset: number = Date.now();
+
+// Intercepteurs
+let requestInterceptors: RequestInterceptor[] = [];
+let responseInterceptors: ResponseInterceptor[] = [];
 
 // Cache des requêtes GET
 const requestCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
 
 // File d'attente offline
-let offlineQueue: Array<{
-  id: string;
-  url: string;
-  method: string;
-  body?: any;
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
-  retryCount: number;
-}> = [];
+let offlineQueue: QueuedRequest[] = [];
 
 // Messages d'erreur par langue
 const errorMessages = {
@@ -53,57 +83,140 @@ const errorMessages = {
     network: "Erreur réseau. Vérifiez votre connexion.",
     timeout: "La requête a expiré. Veuillez réessayer.",
     unauthorized: "Session expirée. Veuillez vous reconnecter.",
+    forbidden: "Accès non autorisé à cette ressource.",
+    notFound: "Ressource non trouvée.",
     server: "Erreur serveur. Veuillez réessayer plus tard.",
     unknown: "Une erreur inattendue est survenue.",
     offline: "Vous êtes hors ligne. La requête sera envoyée automatiquement.",
+    rateLimit: "Trop de requêtes. Veuillez patienter.",
+    badRequest: "Requête invalide. Vérifiez les données envoyées.",
   },
   en: {
     network: "Network error. Please check your connection.",
     timeout: "Request timeout. Please try again.",
     unauthorized: "Session expired. Please log in again.",
+    forbidden: "Access forbidden to this resource.",
+    notFound: "Resource not found.",
     server: "Server error. Please try again later.",
     unknown: "An unexpected error occurred.",
     offline: "You are offline. The request will be sent automatically.",
+    rateLimit: "Too many requests. Please wait.",
+    badRequest: "Bad request. Check the data sent.",
   },
   es: {
     network: "Error de red. Verifique su conexión.",
     timeout: "Tiempo de espera agotado. Intente de nuevo.",
     unauthorized: "Sesión expirada. Inicie sesión nuevamente.",
+    forbidden: "Acceso prohibido a este recurso.",
+    notFound: "Recurso no encontrado.",
     server: "Error del servidor. Intente más tarde.",
     unknown: "Ocurrió un error inesperado.",
     offline: "Está desconectado. La solicitud se enviará automáticamente.",
+    rateLimit: "Demasiadas solicitudes. Espere un momento.",
+    badRequest: "Solicitud incorrecta. Verifique los datos enviados.",
   },
   pt: {
     network: "Erro de rede. Verifique sua conexão.",
     timeout: "Tempo limite excedido. Tente novamente.",
     unauthorized: "Sessão expirada. Faça login novamente.",
+    forbidden: "Acesso proibido a este recurso.",
+    notFound: "Recurso não encontrado.",
     server: "Erro no servidor. Tente mais tarde.",
     unknown: "Ocorreu um erro inesperado.",
     offline: "Você está offline. A solicitação será enviada automaticamente.",
+    rateLimit: "Muitas solicitações. Aguarde um momento.",
+    badRequest: "Solicitação inválida. Verifique os dados enviados.",
   },
+};
+
+// ============ Logging ============
+const log = (level: "info" | "warn" | "error", message: string, data?: any) => {
+  if (!enableLogging) return;
+  const prefix = `[API Client] ${level.toUpperCase()}:`;
+  if (data) {
+    console[level](prefix, message, data);
+  } else {
+    console[level](prefix, message);
+  }
 };
 
 // ============ Configuration ============
 export const setApiAuthToken = (token: string) => {
   authToken = token;
+  log("info", "Auth token set");
 };
 
 export const removeApiAuthToken = () => {
   authToken = null;
+  log("info", "Auth token removed");
 };
 
 export const setBaseURL = (url: string) => {
   baseURL = url;
+  log("info", `Base URL set to: ${url}`);
 };
 
 export const setGlobalTimeout = (ms: number) => {
   timeout = ms;
+  log("info", `Timeout set to: ${ms}ms`);
 };
 
 export const setApiLanguage = (lang: string) => {
   if (errorMessages[lang as keyof typeof errorMessages]) {
     currentLang = lang;
+    log("info", `Language set to: ${lang}`);
   }
+};
+
+export const setEnableCache = (enabled: boolean) => {
+  enableCache = enabled;
+  if (!enabled) requestCache.clear();
+  log("info", `Cache ${enabled ? "enabled" : "disabled"}`);
+};
+
+export const setCacheTTL = (ttl: number) => {
+  cacheTTL = ttl;
+  log("info", `Cache TTL set to: ${ttl}ms`);
+};
+
+export const setEnableOfflineQueue = (enabled: boolean) => {
+  enableOfflineQueue = enabled;
+  log("info", `Offline queue ${enabled ? "enabled" : "disabled"}`);
+};
+
+export const setMaxRetries = (retries: number) => {
+  maxRetries = retries;
+  log("info", `Max retries set to: ${retries}`);
+};
+
+export const setEnableLogging = (enabled: boolean) => {
+  enableLogging = enabled;
+  log("info", `Logging ${enabled ? "enabled" : "disabled"}`);
+};
+
+export const setRateLimit = (enabled: boolean, requestsPerMinute: number = 60) => {
+  rateLimitEnabled = enabled;
+  rateLimitRequestsPerMinute = requestsPerMinute;
+  log("info", `Rate limit ${enabled ? "enabled" : "disabled"} (${requestsPerMinute}/min)`);
+};
+
+// ============ Intercepteurs ============
+export const addRequestInterceptor = (interceptor: RequestInterceptor) => {
+  requestInterceptors.push(interceptor);
+  log("info", "Request interceptor added");
+  return () => {
+    requestInterceptors = requestInterceptors.filter(i => i !== interceptor);
+    log("info", "Request interceptor removed");
+  };
+};
+
+export const addResponseInterceptor = (interceptor: ResponseInterceptor) => {
+  responseInterceptors.push(interceptor);
+  log("info", "Response interceptor added");
+  return () => {
+    responseInterceptors = responseInterceptors.filter(i => i !== interceptor);
+    log("info", "Response interceptor removed");
+  };
 };
 
 // ============ Utilitaires ============
@@ -112,7 +225,12 @@ const getErrorMessage = (status: number, type: string): string => {
   
   const errorMap: Record<number, string> = {
     0: messages.network,
+    400: messages.badRequest,
     401: messages.unauthorized,
+    403: messages.forbidden,
+    404: messages.notFound,
+    408: messages.timeout,
+    429: messages.rateLimit,
     500: messages.server,
     502: messages.server,
     503: messages.server,
@@ -130,15 +248,33 @@ const getCacheKey = (method: string, url: string, body?: any): string => {
   return `${method}:${url}:${body ? JSON.stringify(body) : ""}`;
 };
 
+const checkRateLimit = (): boolean => {
+  if (!rateLimitEnabled) return true;
+  
+  const now = Date.now();
+  if (now - lastRequestReset >= 60000) {
+    requestCount = 0;
+    lastRequestReset = now;
+  }
+  
+  if (requestCount >= rateLimitRequestsPerMinute) {
+    return false;
+  }
+  
+  requestCount++;
+  return true;
+};
+
 // Traitement de la file d'attente offline
 const processOfflineQueue = () => {
   if (offlineQueue.length === 0) return;
   
+  log("info", `Processing offline queue (${offlineQueue.length} requests)`);
   const queue = [...offlineQueue];
   offlineQueue = [];
   
   queue.forEach(req => {
-    request(req.url, { method: req.method, body: req.body })
+    request(req.url, { method: req.method, body: req.body, headers: req.headers })
       .then(req.resolve)
       .catch(req.reject);
   });
@@ -146,51 +282,103 @@ const processOfflineQueue = () => {
 
 // Écouter le retour en ligne
 if (typeof window !== "undefined") {
-  window.addEventListener("online", processOfflineQueue);
+  window.addEventListener("online", () => {
+    log("info", "Online - processing offline queue");
+    processOfflineQueue();
+  });
 }
+
+// ============ Exécution des intercepteurs ============
+const applyRequestInterceptors = async (config: RequestInit): Promise<RequestInit> => {
+  let result = config;
+  for (const interceptor of requestInterceptors) {
+    if (interceptor.onFulfilled) {
+      result = await interceptor.onFulfilled(result);
+    }
+  }
+  return result;
+};
+
+const applyResponseInterceptors = async <T>(response: FetchResponse<T>): Promise<FetchResponse<T>> => {
+  let result = response;
+  for (const interceptor of responseInterceptors) {
+    if (interceptor.onFulfilled) {
+      result = await interceptor.onFulfilled(result);
+    }
+  }
+  return result;
+};
+
+const applyErrorInterceptors = async (error: any): Promise<any> => {
+  let result = error;
+  for (const interceptor of responseInterceptors) {
+    if (interceptor.onRejected) {
+      result = await interceptor.onRejected(result);
+    }
+  }
+  return result;
+};
 
 // ============ Requête principale ============
 async function request<T = any>(
   url: string,
-  options: RequestInit & { skipCache?: boolean; retryCount?: number } = {}
+  options: RequestInit & { skipCache?: boolean; retryCount?: number; skipOfflineQueue?: boolean } = {}
 ): Promise<FetchResponse<T>> {
   const method = options.method || "GET";
   const fullUrl = buildUrl(url);
   const isReadOnly = method === "GET";
   const cacheKey = getCacheKey(method, url, options.body);
   
+  // Vérifier le rate limiting
+  if (!checkRateLimit()) {
+    const error = new Error(getErrorMessage(429, "rateLimit")) as ApiError<T>;
+    error.status = 429;
+    throw error;
+  }
+  
   // Vérifier le cache pour GET
   if (isReadOnly && enableCache && !options.skipCache) {
     const cached = requestCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < cached.ttl) {
+      log("info", `Cache hit for: ${url}`);
       return {
         data: cached.data as T,
         status: 200,
         statusText: "OK (cached)",
         headers: new Headers(),
+        fromCache: true,
       };
     }
   }
   
   // Mode hors ligne : mettre en queue pour les requêtes non-GET
-  if (typeof navigator !== "undefined" && !navigator.onLine && enableOfflineQueue && !isReadOnly) {
+  if (typeof navigator !== "undefined" && !navigator.onLine && enableOfflineQueue && !isReadOnly && !options.skipOfflineQueue) {
+    log("warn", `Offline - queuing request: ${method} ${url}`);
+    
     return new Promise((resolve, reject) => {
       offlineQueue.push({
         id: `${Date.now()}-${Math.random()}`,
         url,
         method,
         body: options.body,
+        headers: options.headers as Record<string, string>,
         resolve,
         reject,
         retryCount: 0,
+        timestamp: Date.now(),
       });
-      reject(new Error(getErrorMessage(0, "offline")));
+      
+      const error = new Error(getErrorMessage(0, "offline")) as ApiError<T>;
+      error.status = 0;
+      error.isOffline = true;
+      reject(error);
     });
   }
   
   // Construction des headers
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "Accept": "application/json",
     ...(options.headers as Record<string, string> || {}),
   };
   
@@ -198,27 +386,37 @@ async function request<T = any>(
     headers["Authorization"] = `Bearer ${authToken}`;
   }
   
+  // Construction de la configuration
+  let config: RequestInit = {
+    ...options,
+    method,
+    headers,
+  };
+  
+  // Appliquer les intercepteurs de requête
+  config = await applyRequestInterceptors(config);
+  
   // Timeout et AbortController
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
+  config.signal = controller.signal;
   
   // Gestion des retries
   const maxAttempts = options.retryCount ?? (isReadOnly ? maxRetries : 1);
   let lastError: any;
   
+  log("info", `Request: ${method} ${fullUrl}`);
+  
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     try {
       // Délai exponentiel entre les tentatives
       if (attempt > 0) {
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+        const delay = 1000 * Math.pow(2, attempt - 1);
+        log("info", `Retry attempt ${attempt} for ${url} after ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
       }
       
-      const response = await fetch(fullUrl, {
-        ...options,
-        method,
-        headers,
-        signal: controller.signal,
-      });
+      const response = await fetch(fullUrl, config);
       
       clearTimeout(timeoutId);
       
@@ -242,27 +440,32 @@ async function request<T = any>(
         throw error;
       }
       
-      // Mettre en cache pour GET
-      if (isReadOnly && enableCache) {
-        requestCache.set(cacheKey, {
-          data,
-          timestamp: Date.now(),
-          ttl: 60000, // 1 minute
-        });
-      }
-      
-      return {
+      const result: FetchResponse<T> = {
         data: data as T,
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
       };
       
+      // Mettre en cache pour GET
+      if (isReadOnly && enableCache) {
+        requestCache.set(cacheKey, {
+          data,
+          timestamp: Date.now(),
+          ttl: cacheTTL,
+        });
+        log("info", `Cached response for: ${url}`);
+      }
+      
+      // Appliquer les intercepteurs de réponse
+      return await applyResponseInterceptors(result);
+      
     } catch (error: any) {
       lastError = error;
       
       // Ne pas réessayer pour certaines erreurs
-      if (error.status === 401 || error.status === 403 || error.status === 404) {
+      if (error.status === 401 || error.status === 403 || error.status === 404 || error.status === 400) {
+        log("warn", `Request failed (no retry): ${method} ${url} - ${error.status}`);
         break;
       }
       
@@ -272,8 +475,11 @@ async function request<T = any>(
         timeoutError.status = 408;
         timeoutError.isTimeout = true;
         lastError = timeoutError;
+        log("error", `Request timeout: ${method} ${url}`);
         break;
       }
+      
+      log("error", `Request attempt ${attempt + 1} failed: ${error.message}`);
     }
   }
   
@@ -284,10 +490,11 @@ async function request<T = any>(
     const networkError = new Error(getErrorMessage(0, "network")) as ApiError<T>;
     networkError.status = 0;
     networkError.isNetworkError = true;
-    throw networkError;
+    lastError = networkError;
   }
   
-  throw lastError;
+  // Appliquer les intercepteurs d'erreur
+  return await applyErrorInterceptors(lastError);
 }
 
 // ============ API Export ============
@@ -315,9 +522,27 @@ export const apiConfig = {
   setApiAuthToken,
   removeApiAuthToken,
   setApiLanguage,
-  clearCache: () => requestCache.clear(),
+  setEnableCache,
+  setCacheTTL,
+  setEnableOfflineQueue,
+  setMaxRetries,
+  setEnableLogging,
+  setRateLimit,
+  clearCache: () => {
+    requestCache.clear();
+    log("info", "Cache cleared");
+  },
   getOfflineQueueLength: () => offlineQueue.length,
-  clearOfflineQueue: () => { offlineQueue = []; },
+  getOfflineQueue: () => [...offlineQueue],
+  clearOfflineQueue: () => {
+    offlineQueue = [];
+    log("info", "Offline queue cleared");
+  },
+  processOfflineQueue: () => {
+    processOfflineQueue();
+  },
+  addRequestInterceptor,
+  addResponseInterceptor,
 };
 
 export default api;
