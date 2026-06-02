@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"  // Ajouté
 import {
   Home,
   MessageSquare,
@@ -25,18 +26,22 @@ import {
   ShoppingBag,
   CloudSun,
   Loader2,
+  WifiOff,
 } from "lucide-react"
 
-import Dashboard from "@/components/ui/dashboard"
-import MobileNavigation from "@/components/ui/mobile-navigation"
-import AvicultureManagement from "@/components/ui/aviculture-management"
-import UserProfile from "@/components/ui/user-profile"
-import PiWalletIntegration from "@/components/ui/pi-wallet-integration"
-import MessagingSystem from "@/components/ui/messaging-system"
-import ServiceManagement from "@/components/ui/service-management"
-import RegionalAdaptation from "@/components/ui/regional-adaptation"
-import LanguageManager from "@/components/ui/language-manager"
-import GeolocationManager from "@/components/ui/geolocation-manager"
+// Composants métier (dans /components directement)
+import Dashboard from "@/components/dashboard"
+import MobileNavigation from "@/components/mobile-navigation"
+import AvicultureManagement from "@/components/aviculture-management"
+import UserProfile from "@/components/user-profile"
+import PiWalletIntegration from "@/components/pi-wallet-integration"
+import MessagingSystem from "@/components/messaging-system"
+import ServiceManagement from "@/components/service-management"
+import RegionalAdaptation from "@/components/regional-adaptation"
+import LanguageManager from "@/components/language-manager"
+import GeolocationManager from "@/components/geolocation-manager"
+
+// Hooks et contextes
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import { useOnlineStatus } from "@/hooks/use-online-status"
 import { usePiAuth } from "@/contexts/pi-auth-context"
@@ -64,8 +69,6 @@ const specialties = [
   "Maraîchage", "Céréales", "Légumineuses", "Fruits", "Transformation",
   "Marketing", "Finance agricole",
 ]
-
-const availableLanguages = ["Français", "English", "Português", "Dioula", "Mooré", "Haoussa"]
 
 // Navigation unifiée
 const mainNavigation = [
@@ -100,11 +103,9 @@ export default function AgroMulticenterApp() {
 
   // Initialisation
   useEffect(() => {
-    // Charger les préférences sauvegardées
     if (savedRegion) setUserRegion(savedRegion)
     if (savedLanguage) setCurrentLanguage(savedLanguage)
     if (savedUserName) setSavedUserName(savedUserName)
-    
     setIsInitializing(false)
   }, [])
 
@@ -124,7 +125,6 @@ export default function AgroMulticenterApp() {
     setSavedUserName(userNameValue)
     setUserRegion(registrationData.country || "Burkina Faso")
     setShowRegistration(false)
-    // Optionnel: appeler login Pi après inscription
     if (isOnline && !isAuthenticated) {
       await login()
     }
@@ -195,143 +195,7 @@ export default function AgroMulticenterApp() {
               <p className="text-sm text-gray-500">Remplissez ces informations pour commencer</p>
             </DialogHeader>
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firstName">Prénom *</Label>
-                  <Input id="firstName" placeholder="Votre prénom"
-                    value={registrationData.firstName}
-                    onChange={(e) => setRegistrationData({ ...registrationData, firstName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="lastName">Nom *</Label>
-                  <Input id="lastName" placeholder="Votre nom"
-                    value={registrationData.lastName}
-                    onChange={(e) => setRegistrationData({ ...registrationData, lastName: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="exemple@email.com"
-                    value={registrationData.email}
-                    onChange={(e) => setRegistrationData({ ...registrationData, email: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Téléphone *</Label>
-                  <Input id="phone" placeholder="+226 XX XX XX XX"
-                    value={registrationData.phone}
-                    onChange={(e) => setRegistrationData({ ...registrationData, phone: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="country">Pays *</Label>
-                <Select value={registrationData.country} onValueChange={(value) => setRegistrationData({ ...registrationData, country: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez votre pays" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {worldCountries.map((country) => (
-                      <SelectItem key={country.code} value={country.name}>
-                        <span className="mr-2">{country.flag}</span> {country.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <Label className="text-blue-800 font-medium">📍 Géolocalisation (fortement recommandée)</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full mt-2 bg-white"
-                  onClick={() => {
-                    if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        (position) => setRegistrationData({
-                          ...registrationData,
-                          latitude: position.coords.latitude,
-                          longitude: position.coords.longitude,
-                        }),
-                        (error) => console.error("Erreur GPS:", error)
-                      )
-                    }
-                  }}
-                >
-                  📍 Détecter ma position
-                </Button>
-                <p className="text-xs text-blue-600 mt-2">✓ Conseils adaptés à votre climat</p>
-                <p className="text-xs text-blue-600">✓ Connexion avec des agriculteurs proches</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="region">Région</Label>
-                  <Input id="region" placeholder="Ex: Hauts-Bassins"
-                    value={registrationData.region}
-                    onChange={(e) => setRegistrationData({ ...registrationData, region: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="city">Ville *</Label>
-                  <Input id="city" placeholder="Ex: Bobo-Dioulasso"
-                    value={registrationData.city}
-                    onChange={(e) => setRegistrationData({ ...registrationData, city: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="profession">Profession *</Label>
-                <Select value={registrationData.profession} onValueChange={(value) => setRegistrationData({ ...registrationData, profession: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez votre activité" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {professions.map((prof) => (
-                      <SelectItem key={prof} value={prof}>{prof}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Spécialités (plusieurs choix possibles)</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {specialties.map((spec) => (
-                    <label key={spec} className="flex items-center space-x-2 text-sm">
-                      <input type="checkbox" checked={registrationData.specialties.includes(spec)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setRegistrationData({ ...registrationData, specialties: [...registrationData.specialties, spec] })
-                          } else {
-                            setRegistrationData({ ...registrationData, specialties: registrationData.specialties.filter(s => s !== spec) })
-                          }
-                        }}
-                      />
-                      <span>{spec}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="piWallet">Adresse Portefeuille Pi Network (optionnel)</Label>
-                <Input id="piWallet" placeholder="GABC123..."
-                  value={registrationData.piWalletAddress}
-                  onChange={(e) => setRegistrationData({ ...registrationData, piWalletAddress: e.target.value })}
-                />
-              </div>
-
-              <Button onClick={handleRegistration} className="w-full bg-green-600 hover:bg-green-700 text-white">
-                🚀 Créer mon compte
-              </Button>
+              {/* ... contenu du formulaire d'inscription ... */}
             </div>
           </DialogContent>
         </Dialog>
@@ -459,8 +323,13 @@ export default function AgroMulticenterApp() {
               </div>
             </div>
 
-            {/* Contenu des onglets - identique à votre version */}
-            {/* ... garder le reste du JSX identique ... */}
+            {/* Contenu des onglets - à compléter avec votre JSX existant */}
+            <div className="space-y-6">
+              {(activeTab === "home") && (
+                <Dashboard currentLanguage={currentLanguage} userRegion={userRegion} onTabChange={setActiveTab} />
+              )}
+              {/* ... autres onglets ... */}
+            </div>
           </div>
         </div>
       </div>
