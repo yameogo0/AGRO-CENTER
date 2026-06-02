@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { 
   Home, 
@@ -26,10 +26,22 @@ import {
   Star,
   Wifi,
   WifiOff,
+  ChevronDown,
+  Heart,
+  Gift,
+  Calendar,
+  HelpCircle,
+  LogOut,
+  Shield,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { useOnlineStatus } from "@/hooks/use-online-status"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import { usePiAuth } from "@/contexts/pi-auth-context"
+import { showToast } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 
 interface MobileNavigationProps {
   activeTab: string
@@ -40,8 +52,8 @@ interface MobileNavigationProps {
   currentLanguage?: string
 }
 
-// Traductions (identiques à l'original)
-const translations = {
+// Traductions multilingues
+const translations: Record<string, any> = {
   fr: {
     home: "Accueil",
     messages: "Messages",
@@ -59,6 +71,15 @@ const translations = {
     offline: "Hors ligne",
     quickAccess: "Accès rapide",
     backToTop: "Haut",
+    farming: "Agriculture",
+    piReady: "Pi prêt",
+    basedOnLocation: "Basé sur votre position",
+    promotions: "Promotions",
+    help: "Aide",
+    logout: "Déconnexion",
+    premium: "Premium",
+    discover: "Découvrir",
+    events: "Événements",
   },
   en: {
     home: "Home",
@@ -77,6 +98,15 @@ const translations = {
     offline: "Offline",
     quickAccess: "Quick access",
     backToTop: "Top",
+    farming: "Farming",
+    piReady: "Pi ready",
+    basedOnLocation: "Based on your location",
+    promotions: "Promotions",
+    help: "Help",
+    logout: "Logout",
+    premium: "Premium",
+    discover: "Discover",
+    events: "Events",
   },
   es: {
     home: "Inicio",
@@ -95,6 +125,15 @@ const translations = {
     offline: "Desconectado",
     quickAccess: "Acceso rápido",
     backToTop: "Arriba",
+    farming: "Agricultura",
+    piReady: "Pi listo",
+    basedOnLocation: "Basado en tu ubicación",
+    promotions: "Promociones",
+    help: "Ayuda",
+    logout: "Cerrar sesión",
+    premium: "Premium",
+    discover: "Descubrir",
+    events: "Eventos",
   },
   pt: {
     home: "Início",
@@ -113,6 +152,15 @@ const translations = {
     offline: "Offline",
     quickAccess: "Acesso rápido",
     backToTop: "Topo",
+    farming: "Agricultura",
+    piReady: "Pi pronto",
+    basedOnLocation: "Baseado na sua localização",
+    promotions: "Promoções",
+    help: "Ajuda",
+    logout: "Sair",
+    premium: "Premium",
+    discover: "Descobrir",
+    events: "Eventos",
   },
   dioula: {
     home: "Soforo",
@@ -131,6 +179,15 @@ const translations = {
     offline: "Ɛ tɛ ye",
     quickAccess: "Fara ka da",
     backToTop: "Sɛgɛn",
+    farming: "Senekɛ",
+    piReady: "Pi bɛ se",
+    basedOnLocation: "I ka yɔrɔ la",
+    promotions: "Jago",
+    help: "Dɛmɛ",
+    logout: "Bɔ",
+    premium: "Gɛrɛn",
+    discover: "Lafi",
+    events: "Ko",
   },
 }
 
@@ -147,14 +204,25 @@ export default function MobileNavigation({
   const [lastScrollY, setLastScrollY] = useState(0)
   const [activeItem, setActiveItem] = useState(activeTab)
   const [localUnreadCount, setLocalUnreadCount] = useState(externalUnreadCount)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
+  
+  const menuRef = useRef<HTMLDivElement>(null)
+  const extendedMenuRef = useRef<HTMLDivElement>(null)
 
   // Hooks personnalisés
   const isOnline = useOnlineStatus()
-  const { isAuthenticated, userData } = usePiAuth()
+  const { isAuthenticated, userData, logout } = usePiAuth()
   const [savedUnreadCount] = useLocalStorage<number>("unreadMessagesCount", 0)
   const [savedNotificationCount] = useLocalStorage<number>("unreadNotificationsCount", 0)
 
   const t = translations[currentLanguage as keyof typeof translations] || translations.fr
+
+  // Heure actuelle
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Navigation principale (5 éléments)
   const mainNavigationItems = [
@@ -167,12 +235,20 @@ export default function MobileNavigation({
 
   // Menu étendu (options supplémentaires)
   const extendedMenuItems = [
-    { id: "network", label: t.network, icon: Users, color: "text-cyan-600", bgColor: "bg-cyan-50", tab: "network" },
+    { id: "network", label: t.network, icon: Users, color: "text-cyan-600", bgColor: "bg-cyan-50", tab: "messages" },
     { id: "wallet", label: t.wallet, icon: Wallet, color: "text-purple-600", bgColor: "bg-purple-50", badge: "π", tab: "wallet" },
     { id: "alerts", label: t.alerts, icon: Bell, color: "text-red-600", bgColor: "bg-red-50", badge: savedNotificationCount || externalNotificationCount, tab: "alerts" },
     { id: "profile", label: t.profile, icon: User, color: "text-emerald-600", bgColor: "bg-emerald-50", tab: "profile" },
     { id: "settings", label: t.settings, icon: Settings, color: "text-gray-600", bgColor: "bg-gray-50", tab: "settings" },
+    { id: "premium", label: t.premium, icon: Crown, color: "text-yellow-600", bgColor: "bg-yellow-50", tab: "subscription" },
+    { id: "discover", label: t.discover, icon: Compass, color: "text-indigo-600", bgColor: "bg-indigo-50", tab: "discover" },
+    { id: "events", label: t.events, icon: Calendar, color: "text-pink-600", bgColor: "bg-pink-50", tab: "events" },
   ]
+
+  // Formater l'heure
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
 
   // Mettre à jour le compteur de messages non lus
   useEffect(() => {
@@ -182,6 +258,7 @@ export default function MobileNavigation({
   // Gestion de la visibilité au scroll avec debounce
   useEffect(() => {
     let ticking = false
+    let scrollTimeout: NodeJS.Timeout
     
     const handleScroll = () => {
       if (!ticking) {
@@ -197,10 +274,19 @@ export default function MobileNavigation({
         })
         ticking = true
       }
+      
+      // Afficher automatiquement après un arrêt du scroll
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(() => {
+        setIsVisible(true)
+      }, 1000)
     }
     
     window.addEventListener("scroll", handleScroll, { passive: true })
-    return () => window.removeEventListener("scroll", handleScroll)
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      clearTimeout(scrollTimeout)
+    }
   }, [lastScrollY])
 
   // Mettre à jour l'élément actif
@@ -212,30 +298,53 @@ export default function MobileNavigation({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (showExtendedMenu && !target.closest('.extended-menu')) {
+      if (showExtendedMenu && extendedMenuRef.current && !extendedMenuRef.current.contains(target)) {
         setShowExtendedMenu(false)
+      }
+      if (showUserMenu && menuRef.current && !menuRef.current.contains(target)) {
+        setShowUserMenu(false)
       }
     }
     document.addEventListener("click", handleClickOutside)
     return () => document.removeEventListener("click", handleClickOutside)
-  }, [showExtendedMenu])
+  }, [showExtendedMenu, showUserMenu])
 
   const handleTabChange = (id: string, action?: string, tab?: string) => {
     if (action === "menu") {
       setShowExtendedMenu(!showExtendedMenu)
     } else {
-      const targetTab = tab || (id === "marketplace" ? "services" : id === "data" ? "analytics" : id)
+      let targetTab = tab || id
+      if (id === "marketplace") targetTab = "services"
+      else if (id === "data") targetTab = "analytics"
+      else if (id === "network") targetTab = "messages"
+      else if (id === "premium") targetTab = "subscription"
+      else if (id === "discover") targetTab = "discover"
+      else if (id === "events") targetTab = "events"
+      
       onTabChange(targetTab)
       setActiveItem(id)
       if (showExtendedMenu) setShowExtendedMenu(false)
+      if (showUserMenu) setShowUserMenu(false)
     }
   }
 
   const handleExtendedMenuClick = (item: typeof extendedMenuItems[0]) => {
-    onTabChange(item.tab)
+    let targetTab = item.tab
+    if (item.id === "network") targetTab = "messages"
+    if (item.id === "premium") targetTab = "subscription"
+    if (item.id === "discover") targetTab = "discover"
+    if (item.id === "events") targetTab = "events"
+    
+    onTabChange(targetTab)
     setActiveItem(item.id)
     setShowExtendedMenu(false)
     onMenuToggle()
+  }
+
+  const handleLogout = async () => {
+    await logout()
+    showToast("Déconnexion réussie", "success")
+    setShowUserMenu(false)
   }
 
   const scrollToTop = () => {
@@ -244,24 +353,89 @@ export default function MobileNavigation({
 
   // Nom d'utilisateur pour l'affichage
   const userName = userData?.username?.split(" ")[0] || "Agriculteur"
+  const userAvatar = userData?.avatar || userData?.username?.charAt(0).toUpperCase() || "🌾"
 
   return (
     <>
+      {/* Menu utilisateur flottant (en haut à droite) */}
+      {showUserMenu && (
+        <div 
+          ref={menuRef}
+          className="fixed top-16 right-4 w-64 bg-white rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-top-5 duration-200"
+        >
+          <div className="p-4 border-b bg-gradient-to-r from-green-50 to-blue-50 rounded-t-2xl">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-12 w-12 border-2 border-white shadow-md">
+                <AvatarFallback className="bg-green-500 text-white text-lg">
+                  {userAvatar}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-semibold text-gray-800">{userName}</p>
+                <p className="text-xs text-gray-500">Membre Agro MC</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <Badge className="bg-green-100 text-green-700 text-[10px]">
+                    {isOnline ? t.online : t.offline}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="p-2">
+            <button 
+              className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => handleTabChange("profile", undefined, "profile")}
+            >
+              <User className="h-4 w-4 text-gray-500" />
+              <span className="text-sm">Mon profil</span>
+            </button>
+            <button 
+              className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => handleTabChange("wallet", undefined, "wallet")}
+            >
+              <Wallet className="h-4 w-4 text-purple-500" />
+              <span className="text-sm">Mon portefeuille</span>
+            </button>
+            <button 
+              className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={() => handleTabChange("settings", undefined, "settings")}
+            >
+              <Settings className="h-4 w-4 text-gray-500" />
+              <span className="text-sm">Paramètres</span>
+            </button>
+            <div className="border-t my-2" />
+            <button 
+              className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="text-sm">{t.logout}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Menu étendu flottant */}
       {showExtendedMenu && (
-        <div className="extended-menu lg:hidden fixed bottom-20 left-4 right-4 bg-white rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-bottom-5 duration-200">
-          <div className="p-4 border-b flex items-center justify-between">
+        <div 
+          ref={extendedMenuRef}
+          className="fixed bottom-20 left-4 right-4 bg-white rounded-2xl shadow-2xl border z-50 animate-in slide-in-from-bottom-5 duration-200"
+        >
+          <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-green-50 to-blue-50 rounded-t-2xl">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               <h3 className="font-semibold text-gray-800">{t.quickAccess}</h3>
             </div>
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setShowExtendedMenu(false)}>
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">{formatTime(currentTime)}</span>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full" onClick={() => setShowExtendedMenu(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <div className="p-3 grid grid-cols-2 gap-2">
+          <div className="p-3 grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
             {extendedMenuItems.map((item) => {
               const Icon = item.icon
               const isActive = activeItem === item.id
@@ -291,7 +465,9 @@ export default function MobileNavigation({
                       </div>
                     )}
                   </div>
-                  {isActive && <CheckIcon className="h-4 w-4 text-green-500" />}
+                  {isActive && (
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  )}
                 </button>
               )
             })}
@@ -304,7 +480,7 @@ export default function MobileNavigation({
               </div>
               <div className="flex items-center gap-1">
                 <MapPin className="h-3 w-3" />
-                <span>Basé sur votre position</span>
+                <span>{t.basedOnLocation}</span>
               </div>
             </div>
           </div>
@@ -322,21 +498,37 @@ export default function MobileNavigation({
           <div className="w-12 h-1 bg-gray-300 rounded-full" />
         </div>
 
-        {/* Statut réseau */}
+        {/* Statut réseau et utilisateur */}
         <div className="flex items-center justify-between px-3 pt-1 pb-0">
-          <div className="flex items-center gap-1">
-            {isOnline ? (
-              <Wifi className="h-3 w-3 text-green-500" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-red-500" />
-            )}
-            <span className="text-[10px] text-gray-400">
-              {isOnline ? t.online : t.offline}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {isOnline ? (
+                <Wifi className="h-3 w-3 text-green-500" />
+              ) : (
+                <WifiOff className="h-3 w-3 text-red-500" />
+              )}
+              <span className="text-[10px] text-gray-400">
+                {isOnline ? t.online : t.offline}
+              </span>
+            </div>
+            <div className="w-px h-3 bg-gray-300" />
+            <div className="flex items-center gap-1">
+              <Leaf className="h-3 w-3 text-green-600" />
+              <span className="text-[10px] text-gray-400">{t.farming}</span>
+            </div>
           </div>
-          <div className="text-[10px] text-gray-400">
-            👋 {userName}
-          </div>
+          <button 
+            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-green-600 transition-colors"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+          >
+            <Avatar className="h-5 w-5">
+              <AvatarFallback className="bg-green-100 text-green-600 text-[10px]">
+                {userAvatar}
+              </AvatarFallback>
+            </Avatar>
+            <span>{userName}</span>
+            <ChevronDown className="h-3 w-3" />
+          </button>
         </div>
 
         <div className="grid grid-cols-5 gap-0 p-2 pb-3">
@@ -356,7 +548,7 @@ export default function MobileNavigation({
               >
                 {/* Badge de notification */}
                 {item.badge && item.badge > 0 && !isActive && (
-                  <div className="absolute -top-1 right-3 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center animate-pulse z-10">
+                  <div className="absolute -top-1 right-3 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center animate-pulse z-10 shadow-sm">
                     <span className="text-[10px] font-bold text-white">{item.badge > 9 ? "9+" : item.badge}</span>
                   </div>
                 )}
@@ -388,44 +580,43 @@ export default function MobileNavigation({
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-0.5">
               <Star className="h-3 w-3 text-yellow-500 fill-current" />
-              <span className="text-[10px] text-gray-500">4.8</span>
+              <span className="text-[10px] text-gray-600">4.8</span>
             </div>
             <div className="w-px h-3 bg-gray-300" />
             <div className="flex items-center gap-0.5">
-              <Leaf className="h-3 w-3 text-green-600" />
-              <span className="text-[10px] text-gray-500">Agriculture</span>
+              <Heart className="h-3 w-3 text-red-500" />
+              <span className="text-[10px] text-gray-600">1.2k</span>
             </div>
             <div className="w-px h-3 bg-gray-300" />
             <div className="flex items-center gap-0.5">
               <Wallet className="h-3 w-3 text-purple-600" />
-              <span className="text-[10px] text-gray-500">Pi prêt</span>
+              <span className="text-[10px] text-gray-600">{t.piReady}</span>
             </div>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-6 px-2 text-[10px] gap-1 text-gray-500 hover:text-green-600"
-            onClick={scrollToTop}
-          >
-            <ChevronUp className="h-3 w-3" />
-            {t.backToTop}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 px-2 text-[10px] gap-1 text-gray-500 hover:text-green-600"
+              onClick={scrollToTop}
+            >
+              <ChevronUp className="h-3 w-3" />
+              {t.backToTop}
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Overlay pour le menu étendu */}
       {showExtendedMenu && (
-        <div className="lg:hidden fixed inset-0 bg-black/20 z-40" onClick={() => setShowExtendedMenu(false)} />
+        <div className="lg:hidden fixed inset-0 bg-black/20 z-40 animate-fade-in" onClick={() => setShowExtendedMenu(false)} />
       )}
 
       {/* Styles personnalisés */}
       <style jsx>{`
         @keyframes pulse-slow {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        .animate-pulse-slow {
-          animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.6; }
         }
         @keyframes slide-in-bottom {
           from {
@@ -437,17 +628,51 @@ export default function MobileNavigation({
             opacity: 1;
           }
         }
+        @keyframes slide-in-top {
+          from {
+            transform: translateY(-20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-pulse-slow {
+          animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
         .animate-in {
           animation: slide-in-bottom 0.2s ease-out;
+        }
+        .slide-in-from-top-5 {
+          animation: slide-in-top 0.2s ease-out;
+        }
+        .animate-fade-in {
+          animation: fade-in 0.2s ease-out;
+        }
+        .hover\:scale-102:hover {
+          transform: scale(1.02);
         }
       `}</style>
     </>
   )
 }
 
-// Composant CheckIcon
-const CheckIcon = ({ className }: { className?: string }) => (
+// Composant Crown pour premium
+const Crown = ({ className }: { className?: string }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2L15 9H22L16 14L19 21L12 16.5L5 21L8 14L2 9H9L12 2Z" />
+  </svg>
+)
+
+// Composant Compass pour découvrir
+const Compass = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4v4m-4 4H4m8 0v4m4-4h4" />
+    <circle cx="12" cy="12" r="2" />
   </svg>
 )
