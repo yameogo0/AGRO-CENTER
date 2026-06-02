@@ -70,7 +70,11 @@ const STORAGE_KEYS = {
   ACCESS_TOKEN: "pi_access_token",
   USER_DATA: "pi_user_data",
   LAST_AUTH_TIME: "pi_last_auth_time",
+  USER_REGION: "user_region",
 };
+
+// Configuration par défaut
+const DEFAULT_REGION = "Burkina Faso";
 
 const loadPiSDK = (): Promise<void> => {
   // Si déjà en cours de chargement, retourner la promesse existante
@@ -91,7 +95,7 @@ const loadPiSDK = (): Promise<void> => {
 
     const script = document.createElement("script");
     
-    if (!PI_NETWORK_CONFIG.SDK_URL) {
+    if (!PI_NETWORK_CONFIG?.SDK_URL) {
       reject(new Error("SDK URL is not configured"));
       return;
     }
@@ -139,6 +143,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [userData, setUserData] = useState<LoginDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPiAvailable, setIsPiAvailable] = useState(false);
+  const [userRegion, setUserRegion] = useState<string>(DEFAULT_REGION);
 
   const isInitialized = useRef(false);
   const authInProgress = useRef(false);
@@ -163,6 +168,18 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
     return Date.now() - parseInt(lastAuthTime) > sevenDays;
+  }, []);
+
+  // Charger la région depuis localStorage
+  const loadRegion = useCallback((): string => {
+    const storedRegion = localStorage.getItem(STORAGE_KEYS.USER_REGION);
+    return storedRegion || DEFAULT_REGION;
+  }, []);
+
+  // Sauvegarder la région
+  const saveRegion = useCallback((region: string) => {
+    localStorage.setItem(STORAGE_KEYS.USER_REGION, region);
+    setUserRegion(region);
   }, []);
 
   // Charger la session depuis localStorage
@@ -199,23 +216,24 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       if (data) {
         const updatedUser: LoginDTO = {
           id: data.id,
-          username: data.name,
-          credits_balance: 0,
-          terms_accepted: true,
+          username: data.username || data.name,
+          credits_balance: data.credits_balance || 0,
+          terms_accepted: data.terms_accepted || true,
           email: data.email,
           phone: data.phone,
-          region: userRegion,
+          region: data.region || userRegion,
           avatar: data.avatar,
           walletAddress: data.walletAddress,
-          verified: data.verified,
+          verified: data.verified || false,
         };
         setUserData(updatedUser);
         saveToken(piAccessToken, updatedUser);
+        if (data.region) saveRegion(data.region);
       }
     } catch (err) {
       console.warn("Erreur lors du rafraîchissement du profil:", err);
     }
-  }, [isAuthenticated, piAccessToken, saveToken]);
+  }, [isAuthenticated, piAccessToken, saveToken, saveRegion, userRegion]);
 
   const authenticateAndLogin = async (): Promise<void> => {
     if (!window.Pi) {
@@ -233,31 +251,37 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      if (!piAuthResult?.accessToken || !piAuthResult?.user) {
+        throw new Error("Authentification Pi invalide");
+      }
+
       setAuthMessage("Connexion au serveur...");
       
       const loginRes = await authApi.login(piAuthResult.user.uid, piAuthResult.accessToken);
       
       // Adapter la réponse du backend au format LoginDTO
       const userDataDTO: LoginDTO = {
-        id: loginRes.data.user.id,
-        username: loginRes.data.user.username || piAuthResult.user.username,
-        credits_balance: loginRes.data.user.piBalance || 0,
-        terms_accepted: true,
-        email: loginRes.data.user.email,
-        phone: loginRes.data.user.phone,
-        region: loginRes.data.user.region,
-        avatar: loginRes.data.user.avatar,
-        walletAddress: piAuthResult.user.uid,
-        verified: true,
+        id: loginRes.data.user?.id || piAuthResult.user.uid,
+        username: loginRes.data.user?.username || piAuthResult.user.username,
+        credits_balance: loginRes.data.user?.credits_balance || loginRes.data.user?.piBalance || 0,
+        terms_accepted: loginRes.data.user?.terms_accepted || true,
+        email: loginRes.data.user?.email,
+        phone: loginRes.data.user?.phone,
+        region: loginRes.data.user?.region || loadRegion(),
+        avatar: loginRes.data.user?.avatar,
+        walletAddress: loginRes.data.user?.walletAddress || piAuthResult.user.uid,
+        verified: loginRes.data.user?.verified || true,
       };
 
-      if (piAuthResult?.accessToken) {
+      // Stocker le token d'accès
+      if (piAuthResult.accessToken) {
         setPiAccessToken(piAuthResult.accessToken);
         setApiAuthToken(piAuthResult.accessToken);
       }
 
       setUserData(userDataDTO);
       saveToken(piAuthResult.accessToken, userDataDTO);
+      if (userDataDTO.region) saveRegion(userDataDTO.region);
       setIsAuthenticated(true);
       
       console.log("✅ Authentification réussie pour:", userDataDTO.username);
@@ -289,7 +313,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // Vérifier si on est dans Pi Browser
       if (!isPiBrowser()) {
         setAuthMessage("Ouverture dans Pi Browser...");
-        // Afficher un message invitant à ouvrir dans Pi Browser
         setError("Veuillez ouvrir cette application dans le navigateur Pi Network");
         setIsLoading(false);
         authInProgress.current = false;
@@ -300,18 +323,19 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       if (typeof window.Pi === "undefined") {
         setAuthMessage("Chargement du SDK Pi Network...");
         await loadPiSDK();
-      }
-
-      // Vérifier que Pi est bien disponible
-      if (typeof window.Pi === "undefined") {
-        throw new Error("Le SDK Pi Network n'a pas pu être chargé");
+        
+        // Vérifier à nouveau après chargement
+        if (typeof window.Pi === "undefined") {
+          throw new Error("Le SDK Pi Network n'a pas pu être chargé");
+        }
       }
 
       setIsPiAvailable(true);
       setAuthMessage("Initialisation de Pi Network...");
+      
       await window.Pi.init({
         version: "2.0",
-        sandbox: PI_NETWORK_CONFIG.SANDBOX,
+        sandbox: PI_NETWORK_CONFIG?.SANDBOX ?? true,
       });
 
       await authenticateAndLogin();
@@ -351,6 +375,13 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const reinitialize = useCallback(async (): Promise<void> => {
+    console.log("🔄 Réinitialisation du contexte Pi Auth...");
+    sdkLoadPromise = null;
+    isInitialized.current = false;
+    await initializePiAndAuthenticate();
+  }, []);
+
   const initializePiAndAuthenticate = useCallback(async () => {
     if (isInitialized.current) return;
     isInitialized.current = true;
@@ -359,6 +390,10 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     
     try {
+      // Charger la région sauvegardée
+      const savedRegion = loadRegion();
+      setUserRegion(savedRegion);
+      
       // D'abord, essayer de restaurer une session existante
       const hasStoredSession = loadStoredSession();
       
@@ -376,14 +411,15 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         setAuthMessage("Prêt à vous connecter avec Pi Network");
       } else {
         setAuthMessage("Veuillez ouvrir dans Pi Browser");
+        setError("Cette application est optimisée pour le navigateur Pi Network. Veuillez l'ouvrir dans Pi Browser pour vous connecter.");
       }
     } catch (err: any) {
       console.error("Erreur d'initialisation:", err);
-      setError(err.message);
+      setError(err.message || "Erreur lors de l'initialisation");
     } finally {
       setIsLoading(false);
     }
-  }, [loadStoredSession]);
+  }, [loadStoredSession, loadRegion]);
 
   useEffect(() => {
     initializePiAndAuthenticate();
@@ -397,7 +433,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     userData,
     login,
     logout,
-    reinitialize: initializePiAndAuthenticate,
+    reinitialize,
     error,
     isPiAvailable,
     refreshUserData,
@@ -426,4 +462,26 @@ export function usePiAuth() {
     throw new Error("usePiAuth must be used within a PiAuthProvider");
   }
   return context;
+}
+
+// Hook utilitaire pour obtenir la région utilisateur
+export function useUserRegion() {
+  const { userData } = usePiAuth();
+  const [region, setRegion] = useState<string>(DEFAULT_REGION);
+  
+  useEffect(() => {
+    const storedRegion = localStorage.getItem(STORAGE_KEYS.USER_REGION);
+    if (storedRegion) {
+      setRegion(storedRegion);
+    } else if (userData?.region) {
+      setRegion(userData.region);
+    }
+  }, [userData]);
+  
+  const updateRegion = useCallback((newRegion: string) => {
+    localStorage.setItem(STORAGE_KEYS.USER_REGION, newRegion);
+    setRegion(newRegion);
+  }, []);
+  
+  return { region, updateRegion };
 }
