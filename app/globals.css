@@ -19,7 +19,7 @@
     }
   }
 
-  @keyframes slide-in-bottom {
+  @keyframes fade-in-up {
     from {
       transform: translateY(20px);
       opacity: 0;
@@ -30,7 +30,7 @@
     }
   }
 
-  @keyframes slide-in-top {
+  @keyframes fade-in-down {
     from {
       transform: translateY(-20px);
       opacity: 0;
@@ -41,7 +41,7 @@
     }
   }
 
-  @keyframes slide-in-left {
+  @keyframes fade-in-left {
     from {
       transform: translateX(-20px);
       opacity: 0;
@@ -52,7 +52,7 @@
     }
   }
 
-  @keyframes slide-in-right {
+  @keyframes fade-in-right {
     from {
       transform: translateX(20px);
       opacity: 0;
@@ -119,25 +119,55 @@
     }
   }
 
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes wiggle {
+    0%, 100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-3deg);
+    }
+    75% {
+      transform: rotate(3deg);
+    }
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% {
+      box-shadow: 0 0 5px rgba(34, 197, 94, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+    }
+  }
+
   /* Classes d'animation */
   .animate-fade-in {
     animation: fade-in 0.3s ease-out;
   }
 
-  .animate-slide-in-bottom {
-    animation: slide-in-bottom 0.3s ease-out;
+  .animate-fade-in-up {
+    animation: fade-in-up 0.3s ease-out;
   }
 
-  .animate-slide-in-top {
-    animation: slide-in-top 0.3s ease-out;
+  .animate-fade-in-down {
+    animation: fade-in-down 0.3s ease-out;
   }
 
-  .animate-slide-in-left {
-    animation: slide-in-left 0.3s ease-out;
+  .animate-fade-in-left {
+    animation: fade-in-left 0.3s ease-out;
   }
 
-  .animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
+  .animate-fade-in-right {
+    animation: fade-in-right 0.3s ease-out;
   }
 
   .animate-scale-in {
@@ -160,6 +190,18 @@
     animation: spin-slow 3s linear infinite;
   }
 
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-wiggle {
+    animation: wiggle 0.5s ease-in-out;
+  }
+
+  .animate-glow-pulse {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
   /* Utilitaires de délai d'animation */
   .animation-delay-100 {
     animation-delay: 100ms;
@@ -175,6 +217,10 @@
 
   .animation-delay-500 {
     animation-delay: 500ms;
+  }
+
+  .animation-delay-700 {
+    animation-delay: 700ms;
   }
 
   .animation-delay-1000 {
@@ -194,8 +240,34 @@
     animation-duration: 500ms;
   }
 
+  .animation-duration-700 {
+    animation-duration: 700ms;
+  }
+
   .animation-duration-1000 {
     animation-duration: 1000ms;
+  }
+
+  /* Utilitaires d'itération */
+  .animation-iteration-1 {
+    animation-iteration-count: 1;
+  }
+
+  .animation-iteration-infinite {
+    animation-iteration-count: infinite;
+  }
+
+  /* Utilitaires de remplissage */
+  .animation-fill-forwards {
+    animation-fill-mode: forwards;
+  }
+
+  .animation-fill-backwards {
+    animation-fill-mode: backwards;
+  }
+
+  .animation-fill-both {
+    animation-fill-mode: both;
   }
 
   /* Utilitaires pour l'agriculture */
@@ -204,8 +276,19 @@
     background-size: 24px 24px;
   }
 
+  .bg-farm-pattern-dark {
+    background-image: radial-gradient(circle at 1px 1px, rgba(34, 197, 94, 0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
   .bg-leaf-pattern {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2322c55e' opacity='0.05'%3E%3Cpath d='M12 2L15 9H22L16 14L19 21L12 16.5L5 21L8 14L2 9H9L12 2Z'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 40px 40px;
+  }
+
+  .bg-leaf-pattern-dark {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2322c55e' opacity='0.02'%3E%3Cpath d='M12 2L15 9H22L16 14L19 21L12 16.5L5 21L8 14L2 9H9L12 2Z'/%3E%3C/svg%3E");
     background-repeat: repeat;
     background-size: 40px 40px;
   }
@@ -239,26 +322,58 @@
     background: #a1a1a1;
   }
 
-  /* Utilitaires de texte */
+  .scrollbar-thin-dark::-webkit-scrollbar-track {
+    background: #1f1f1f;
+  }
+
+  .scrollbar-thin-dark::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+  }
+
+  /* Utilitaires de texte avec gradient */
   .text-gradient-green {
-    background: linear-gradient(135deg, #22c55e, #15803d);
+    background: linear-gradient(135deg, #22c55e, #15803d, #166534);
+    background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    animation: shine 3s linear infinite;
   }
 
   .text-gradient-blue {
-    background: linear-gradient(135deg, #3b82f6, #1e3a8a);
+    background: linear-gradient(135deg, #3b82f6, #1e3a8a, #1e40af);
+    background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    animation: shine 3s linear infinite;
   }
 
   .text-gradient-purple {
-    background: linear-gradient(135deg, #a855f7, #6b21a5);
+    background: linear-gradient(135deg, #a855f7, #6b21a5, #7e22ce);
+    background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    animation: shine 3s linear infinite;
+  }
+
+  .text-gradient-orange {
+    background: linear-gradient(135deg, #f97316, #ea580c, #c2410c);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shine 3s linear infinite;
+  }
+
+  @keyframes shine {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 200% 50%;
+    }
   }
 
   /* Utilitaires de glassmorphisme */
@@ -274,27 +389,42 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
+  .glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+
   /* Utilitaires pour la réduction de mouvement */
   @media (prefers-reduced-motion: reduce) {
-    .reduce-motion * {
+    .reduce-motion *,
+    *:has(> .reduce-motion) {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .animate-float,
+    .animate-bounce-subtle,
+    .animate-wiggle {
+      animation: none !important;
     }
   }
 }
 
 @layer base {
   :root {
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
+    --font-sans: var(--font-geist-sans, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+    --font-mono: var(--font-geist-mono, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace);
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
+    --primary: 142 76% 36%;
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
@@ -306,7 +436,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --ring: 142 76% 36%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -315,12 +445,13 @@
     --radius: 0.5rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary: 142 76% 36%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 142 76% 36%;
+    --transition-default: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {
@@ -330,8 +461,8 @@
     --card-foreground: 0 0% 98%;
     --popover: 0 0% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 14.9%;
     --secondary-foreground: 0 0% 98%;
     --muted: 0 0% 14.9%;
@@ -342,7 +473,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --ring: 142 76% 36%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -350,12 +481,12 @@
     --chart-5: 340 75% 55%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary: 142 76% 36%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 142 76% 36%;
   }
 }
 
@@ -366,7 +497,8 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 
   /* Smooth scrolling */
@@ -374,14 +506,18 @@
     scroll-behavior: smooth;
   }
 
-  /* Focus styles */
+  /* Focus styles améliorés */
   *:focus-visible {
-    @apply outline-none ring-2 ring-green-500 ring-offset-2 ring-offset-white;
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
   }
 
   /* Selection styles */
   ::selection {
-    @apply bg-green-100 text-green-900;
+    @apply bg-primary/20 text-primary-foreground;
+  }
+
+  ::-moz-selection {
+    @apply bg-primary/20 text-primary-foreground;
   }
 
   /* Number input spinners */
@@ -390,10 +526,25 @@
     opacity: 0.5;
   }
 
-  /* Disable number input spinners on hover */
   input[type="number"]:hover::-webkit-inner-spin-button,
   input[type="number"]:hover::-webkit-outer-spin-button {
     opacity: 1;
+  }
+
+  /* Supprimer les flèches des inputs number si nécessaire */
+  input[type="number"].no-spinner::-webkit-inner-spin-button,
+  input[type="number"].no-spinner::-webkit-outer-spin-button {
+    display: none;
+  }
+
+  input[type="number"].no-spinner {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  /* Styles pour les liens */
+  a:not([class]) {
+    @apply text-primary hover:text-primary/80 underline-offset-2 hover:underline transition-colors;
   }
 }
 
@@ -404,31 +555,56 @@
     @apply mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl;
   }
 
+  .container-wide {
+    @apply mx-auto px-4 sm:px-6 lg:px-8 max-w-[1400px];
+  }
+
+  .container-full {
+    @apply w-full px-4 sm:px-6 lg:px-8;
+  }
+
   /* Cartes agricoles */
   .card-farm {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200;
+    @apply bg-card rounded-xl shadow-sm border border-border hover:shadow-md transition-all duration-200 hover:border-primary/20;
+  }
+
+  .card-farm-hover {
+    @apply bg-card rounded-xl shadow-sm border border-border hover:shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-primary/30;
   }
 
   /* Badges de statut */
   .badge-available {
-    @apply bg-green-100 text-green-700 border-green-200;
+    @apply bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800;
   }
 
   .badge-busy {
-    @apply bg-orange-100 text-orange-700 border-orange-200;
+    @apply bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800;
   }
 
   .badge-unavailable {
-    @apply bg-red-100 text-red-700 border-red-200;
+    @apply bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800;
+  }
+
+  .badge-premium {
+    @apply bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800;
   }
 
   /* Boutons Pi */
   .btn-pi {
-    @apply bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center gap-2;
+    @apply bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-pi-outline {
-    @apply border border-purple-600 text-purple-600 hover:bg-purple-50 font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center gap-2;
+    @apply border border-purple-600 text-purple-600 hover:bg-purple-50 active:bg-purple-100 font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2 dark:border-purple-500 dark:text-purple-400 dark:hover:bg-purple-950/50 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Boutons agricoles */
+  .btn-farm {
+    @apply bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-farm-outline {
+    @apply border border-primary text-primary hover:bg-primary/10 active:bg-primary/20 font-medium py-2 px-4 rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   /* Animation de chargement Pi */
@@ -448,12 +624,17 @@
 
   /* Grille responsive pour les produits */
   .products-grid {
-    @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4;
+    @apply grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4;
   }
 
   /* Grille responsive pour les services */
   .services-grid {
-    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5;
+  }
+
+  /* Grille pour les utilisateurs/profils */
+  .users-grid {
+    @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4;
   }
 
   /* Ligne de séparation avec motif agricole */
@@ -463,6 +644,115 @@
 
   .separator-farm::before {
     content: '';
-    @apply absolute inset-0 h-px bg-gradient-to-r from-transparent via-green-300 to-transparent;
+    @apply absolute inset-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent;
+  }
+
+  /* Avatars et icônes */
+  .avatar-farm {
+    @apply relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted;
+  }
+
+  .avatar-farm-image {
+    @apply aspect-square h-full w-full object-cover;
+  }
+
+  .avatar-farm-fallback {
+    @apply flex h-full w-full items-center justify-center bg-primary/10 text-primary font-medium;
+  }
+
+  /* Tooltips */
+  .tooltip-content {
+    @apply z-50 overflow-hidden rounded-md bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2;
+  }
+}
+
+/* Utilitaires supplémentaires utiles */
+@layer utilities {
+  /* Accessibilité - focus visible uniquement au clavier */
+  .focus-visible-only:focus {
+    outline: none;
+  }
+
+  .focus-visible-only:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  /* Masquer le focus pour les souris */
+  @media (pointer: fine) {
+    .hide-focus-visible:focus {
+      outline: none;
+    }
+  }
+
+  /* Texte responsive */
+  .text-responsive-sm {
+    @apply text-xs sm:text-sm;
+  }
+
+  .text-responsive-base {
+    @apply text-sm sm:text-base;
+  }
+
+  .text-responsive-lg {
+    @apply text-base sm:text-lg md:text-xl;
+  }
+
+  .text-responsive-xl {
+    @apply text-lg sm:text-xl md:text-2xl lg:text-3xl;
+  }
+
+  /* Espacements responsives */
+  .space-responsive-y {
+    @apply space-y-3 sm:space-y-4 md:space-y-6;
+  }
+
+  .space-responsive-x {
+    @apply space-x-2 sm:space-x-3 md:space-x-4;
+  }
+
+  /* Padding responsifs */
+  .p-responsive {
+    @apply p-3 sm:p-4 md:p-6;
+  }
+
+  /* Gap responsifs pour les grilles */
+  .gap-responsive {
+    @apply gap-2 sm:gap-3 md:gap-4 lg:gap-5;
+  }
+
+  /* Breakpoints personnalisés pour l'agriculture */
+  .max-w-farm-card {
+    @apply max-w-sm md:max-w-md lg:max-w-lg;
+  }
+
+  /* Overlays et modales */
+  .overlay-backdrop {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300;
+  }
+
+  /* Skeletons pour chargement */
+  .skeleton {
+    @apply animate-pulse bg-muted rounded-md;
+  }
+
+  .skeleton-text {
+    @apply skeleton h-4 w-full;
+  }
+
+  .skeleton-circle {
+    @apply skeleton rounded-full w-10 h-10;
+  }
+
+  /* Transitions personnalisées */
+  .transition-smooth {
+    transition: var(--transition-default);
+  }
+
+  .transition-fast {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-bounce {
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   }
 }
