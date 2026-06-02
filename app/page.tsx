@@ -31,14 +31,14 @@ import UserProfile from "@/components/user-profile"
 import PiWalletIntegration from "@/components/pi-wallet-integration"
 import MessagingSystem from "@/components/messaging-system"
 import ServiceManagement from "@/components/service-management"
-import RegionalAdaptation from "@/components/regional-adaptation"
 import LanguageManager from "@/components/language-manager"
 import GeolocationManager from "@/components/geolocation-manager"
+import RegionalAdaptation from "@/components/regional-adaptation"
 
 export default function AgroMulticenterApp() {
   const [activeTab, setActiveTab] = useState("home")
   const [currentLanguage, setCurrentLanguage] = useState("fr")
-  const [userRegion, setUserRegion] = useState("Burkina Faso")
+  const [userRegion, setUserRegion] = useState("Burkina Faso")  // ✅ Ajouté
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showRegistration, setShowRegistration] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(true)
@@ -52,11 +52,11 @@ export default function AgroMulticenterApp() {
     region: "",
     city: "",
     profession: "",
-    specialties: [],
-    languages: [],
+    specialties: [] as string[],
+    languages: [] as string[],
     piWalletAddress: "",
-    latitude: null,
-    longitude: null,
+    latitude: null as number | null,
+    longitude: null as number | null,
   })
 
   const worldCountries = [
@@ -75,37 +75,18 @@ export default function AgroMulticenterApp() {
     { name: "Brazil", code: "BR", flag: "🇧🇷", continent: "South America" },
     { name: "India", code: "IN", flag: "🇮🇳", continent: "Asia" },
     { name: "China", code: "CN", flag: "🇨🇳", continent: "Asia" },
-    // ... autres pays
   ]
 
   const professions = [
-    "Agriculteur",
-    "Éleveur",
-    "Vétérinaire",
-    "Agronome",
-    "Transformateur agricole",
-    "Commerçant agricole",
-    "Consultant agricole",
-    "Formateur",
-    "Chercheur",
-    "Coopérative",
-    "ONG",
-    "Autre",
+    "Agriculteur", "Éleveur", "Vétérinaire", "Agronome",
+    "Transformateur agricole", "Commerçant agricole", "Consultant agricole",
+    "Formateur", "Chercheur", "Coopérative", "ONG", "Autre",
   ]
 
   const specialties = [
-    "Aviculture",
-    "Bovins",
-    "Ovins/Caprins",
-    "Pisciculture",
-    "Apiculture",
-    "Maraîchage",
-    "Céréales",
-    "Légumineuses",
-    "Fruits",
-    "Transformation",
-    "Marketing",
-    "Finance agricole",
+    "Aviculture", "Bovins", "Ovins/Caprins", "Pisciculture", "Apiculture",
+    "Maraîchage", "Céréales", "Légumineuses", "Fruits", "Transformation",
+    "Marketing", "Finance agricole",
   ]
 
   const availableLanguages = ["Français", "English", "Português", "Dioula", "Mooré", "Haoussa"]
@@ -114,7 +95,9 @@ export default function AgroMulticenterApp() {
     console.log("Données d'inscription:", registrationData)
     setIsLoggedIn(true)
     setShowRegistration(false)
-    setUserRegion(registrationData.country)
+    if (registrationData.country) {
+      setUserRegion(registrationData.country)
+    }
   }
 
   const navigationItems = [
@@ -151,7 +134,6 @@ export default function AgroMulticenterApp() {
           </CardContent>
         </Card>
 
-        {/* Registration Dialog */}
         <Dialog open={showRegistration} onOpenChange={setShowRegistration}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -218,53 +200,6 @@ export default function AgroMulticenterApp() {
                 </Select>
               </div>
 
-              <div>
-                <Label htmlFor="geolocation">Géolocalisation (Obligatoire)</Label>
-                <div className="space-y-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full bg-transparent"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            console.log("Position:", position.coords.latitude, position.coords.longitude)
-                            setRegistrationData({
-                              ...registrationData,
-                              latitude: position.coords.latitude,
-                              longitude: position.coords.longitude,
-                            })
-                          },
-                          (error) => {
-                            console.error("Erreur de géolocalisation:", error)
-                          },
-                        )
-                      }
-                    }}
-                  >
-                    📍 Détecter ma position automatiquement
-                  </Button>
-                  <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg">
-                    <p className="font-medium text-blue-800 mb-1">Pourquoi la géolocalisation ?</p>
-                    <ul className="space-y-1 text-blue-700">
-                      <li>• Conseils agricoles adaptés à votre climat</li>
-                      <li>• Connexion avec des utilisateurs proches</li>
-                      <li>• Marketplace régional personnalisé</li>
-                      <li>• Alertes météo et agricoles locales</li>
-                    </ul>
-                  </div>
-                  <div className="text-xs text-gray-500 bg-green-50 p-3 rounded-lg">
-                    <p className="font-medium text-green-800 mb-1">🔒 Respect de votre vie privée</p>
-                    <ul className="space-y-1 text-green-700">
-                      <li>• Données chiffrées conformes au RGPD</li>
-                      <li>• Géolocalisation désactivable après inscription</li>
-                      <li>• Transparence totale sur l'utilisation</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="region">Région/État</Label>
@@ -304,9 +239,9 @@ export default function AgroMulticenterApp() {
               </div>
 
               <div>
-                <Label>Spécialités (sélectionnez plusieurs)</Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {specialties.map((specialty) => (
+                <Label>Spécialités</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {specialties.slice(0, 8).map((specialty) => (
                     <label key={specialty} className="flex items-center space-x-2">
                       <input
                         type="checkbox"
@@ -333,8 +268,8 @@ export default function AgroMulticenterApp() {
 
               <div>
                 <Label>Langues parlées</Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {availableLanguages.slice(0, 12).map((language) => (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {availableLanguages.map((language) => (
                     <label key={language} className="flex items-center space-x-2">
                       <input
                         type="checkbox"
@@ -435,8 +370,7 @@ export default function AgroMulticenterApp() {
 
           <div className="absolute bottom-4 left-4 right-4">
             <div className="bg-gradient-to-r from-green-500 to-blue-600 text-white p-3 rounded-lg text-center">
-              <p className="text-sm font-medium">Région actuelle</p>
-              <p className="text-xs">{userRegion}</p>
+              <p className="text-sm font-medium">Région actuelle: {userRegion}</p>
             </div>
           </div>
         </div>
@@ -468,7 +402,11 @@ export default function AgroMulticenterApp() {
             {/* Tab Content */}
             <div className="space-y-6">
               {activeTab === "home" && (
-                <Dashboard currentLanguage={currentLanguage} userRegion={userRegion} onTabChange={setActiveTab} />
+                <Dashboard 
+                  currentLanguage={currentLanguage} 
+                  userRegion={userRegion} 
+                  onTabChange={setActiveTab} 
+                />
               )}
 
               {activeTab === "aviculture" && (
@@ -487,7 +425,9 @@ export default function AgroMulticenterApp() {
                 <PiWalletIntegration currentLanguage={currentLanguage} userRegion={userRegion} />
               )}
 
-              {activeTab === "profile" && <UserProfile currentLanguage={currentLanguage} userRegion={userRegion} />}
+              {activeTab === "profile" && (
+                <UserProfile currentLanguage={currentLanguage} userRegion={userRegion} />
+              )}
 
               {activeTab === "regional" && (
                 <RegionalAdaptation
