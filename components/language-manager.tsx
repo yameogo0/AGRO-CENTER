@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
+import { Switch } from "@/components/ui/switch"
+import { Progress } from "@/components/ui/progress"
+import { 
   Search,
   Users,
   CheckCircle,
@@ -30,8 +32,16 @@ import {
   Zap,
   Coffee,
   Target,
-  MapPin, // ← Ajoutez cette ligne
+  MapPin,
+  X,
+  ChevronRight,
+  Loader2,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
+import { useOnlineStatus } from "@/hooks/use-online-status"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { showToast } from "@/lib/utils"
 
 interface LanguageManagerProps {
   currentLanguage: string
@@ -52,8 +62,14 @@ interface Language {
   fileSize?: string
 }
 
+interface DownloadedLanguage {
+  code: string
+  downloadedAt: number
+  fileSize: string
+}
+
 // Traductions du gestionnaire lui-même
-const managerTranslations = {
+const managerTranslations: Record<string, any> = {
   fr: {
     title: "Gestionnaire de Langues",
     subtitle: "Agro Multicenter Hinos disponible en",
@@ -93,6 +109,8 @@ const managerTranslations = {
     offlinePacks: "Packs de langues hors ligne",
     offlinePacksDesc: "Téléchargez les packs de langues pour utiliser l'application sans connexion internet",
     download: "Télécharger",
+    downloaded: "Téléchargé",
+    remove: "Retirer",
     offlineInfo: "Les packs de langues permettent d'utiliser l'application même sans connexion internet",
     popular: "Populaire",
     topContributor: "Top contributeur",
@@ -101,6 +119,14 @@ const managerTranslations = {
     quickSwitch: "Changement rapide",
     recentlyAdded: "Ajouts récents",
     mostTranslated: "Les plus traduites",
+    online: "En ligne",
+    offline: "Hors ligne",
+    refresh: "Actualiser",
+    loading: "Chargement...",
+    downloadComplete: "Téléchargement terminé",
+    downloadError: "Erreur de téléchargement",
+    languageChanged: "Langue changée",
+    comingSoon: "Bientôt disponible",
   },
   en: {
     title: "Language Manager",
@@ -141,6 +167,8 @@ const managerTranslations = {
     offlinePacks: "Offline language packs",
     offlinePacksDesc: "Download language packs to use the app without internet connection",
     download: "Download",
+    downloaded: "Downloaded",
+    remove: "Remove",
     offlineInfo: "Language packs allow you to use the app even without internet connection",
     popular: "Popular",
     topContributor: "Top contributor",
@@ -149,6 +177,14 @@ const managerTranslations = {
     quickSwitch: "Quick switch",
     recentlyAdded: "Recently added",
     mostTranslated: "Most translated",
+    online: "Online",
+    offline: "Offline",
+    refresh: "Refresh",
+    loading: "Loading...",
+    downloadComplete: "Download complete",
+    downloadError: "Download error",
+    languageChanged: "Language changed",
+    comingSoon: "Coming soon",
   },
   es: {
     title: "Gestor de Idiomas",
@@ -189,6 +225,8 @@ const managerTranslations = {
     offlinePacks: "Paquetes de idiomas sin conexión",
     offlinePacksDesc: "Descarga paquetes de idiomas para usar la app sin internet",
     download: "Descargar",
+    downloaded: "Descargado",
+    remove: "Eliminar",
     offlineInfo: "Los paquetes de idiomas permiten usar la app incluso sin conexión",
     popular: "Popular",
     topContributor: "Mejor colaborador",
@@ -197,6 +235,14 @@ const managerTranslations = {
     quickSwitch: "Cambio rápido",
     recentlyAdded: "Agregados recientemente",
     mostTranslated: "Más traducidos",
+    online: "En línea",
+    offline: "Desconectado",
+    refresh: "Actualizar",
+    loading: "Cargando...",
+    downloadComplete: "Descarga completa",
+    downloadError: "Error de descarga",
+    languageChanged: "Idioma cambiado",
+    comingSoon: "Próximamente",
   },
   pt: {
     title: "Gestor de Idiomas",
@@ -237,6 +283,8 @@ const managerTranslations = {
     offlinePacks: "Pacotes de idiomas offline",
     offlinePacksDesc: "Baixe pacotes de idiomas para usar o app sem internet",
     download: "Baixar",
+    downloaded: "Baixado",
+    remove: "Remover",
     offlineInfo: "Pacotes de idiomas permitem usar o app mesmo sem conexão",
     popular: "Popular",
     topContributor: "Melhor colaborador",
@@ -245,6 +293,14 @@ const managerTranslations = {
     quickSwitch: "Troca rápida",
     recentlyAdded: "Adicionados recentemente",
     mostTranslated: "Mais traduzidos",
+    online: "Online",
+    offline: "Offline",
+    refresh: "Atualizar",
+    loading: "Carregando...",
+    downloadComplete: "Download concluído",
+    downloadError: "Erro no download",
+    languageChanged: "Idioma alterado",
+    comingSoon: "Em breve",
   },
 }
 
@@ -253,7 +309,14 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
   const [selectedRegion, setSelectedRegion] = useState("all")
   const [activeTab, setActiveTab] = useState("languages")
   const [uiLanguage, setUiLanguage] = useState(currentLanguage)
+  const [downloadingLang, setDownloadingLang] = useState<string | null>(null)
+  const [autoDetection, setAutoDetection] = useLocalStorage("autoLanguageDetection", true)
+  const [autoTranslation, setAutoTranslation] = useLocalStorage("autoTranslation", true)
+  const [textToSpeech, setTextToSpeech] = useLocalStorage("textToSpeech", false)
+  const [downloadedLanguages, setDownloadedLanguages] = useLocalStorage<DownloadedLanguage[]>("downloadedLanguages", [])
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
+  const isOnline = useOnlineStatus()
   const t = managerTranslations[uiLanguage as keyof typeof managerTranslations] || managerTranslations.fr
 
   const languages: Language[] = [
@@ -424,11 +487,62 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
     return texts[uiLang as keyof typeof texts]?.[status as keyof typeof texts.fr] || status
   }
 
-  const getPopularityColor = (popularity: number) => {
-    if (popularity >= 90) return "text-green-600"
-    if (popularity >= 80) return "text-blue-600"
-    if (popularity >= 70) return "text-yellow-600"
-    return "text-gray-600"
+  const isLanguageDownloaded = (code: string) => {
+    return downloadedLanguages.some(lang => lang.code === code)
+  }
+
+  const handleDownloadLanguage = async (language: Language) => {
+    if (!isOnline) {
+      showToast("Connexion internet requise", "error")
+      return
+    }
+
+    if (language.status !== "available" && language.status !== "beta") {
+      showToast(t.comingSoon, "info")
+      return
+    }
+
+    setDownloadingLang(language.code)
+    try {
+      // Simuler un téléchargement
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      setDownloadedLanguages(prev => {
+        if (prev.some(l => l.code === language.code)) return prev
+        return [...prev, {
+          code: language.code,
+          downloadedAt: Date.now(),
+          fileSize: language.fileSize || "0 MB",
+        }]
+      })
+      showToast(`${language.name} ${t.downloadComplete}`, "success")
+    } catch (error) {
+      showToast(t.downloadError, "error")
+    } finally {
+      setDownloadingLang(null)
+    }
+  }
+
+  const handleRemoveLanguage = (code: string) => {
+    setDownloadedLanguages(prev => prev.filter(l => l.code !== code))
+    showToast("Langue retirée", "success")
+  }
+
+  const handleLanguageChange = (code: string) => {
+    onLanguageChange(code)
+    setUiLanguage(code)
+    showToast(`${t.languageChanged} : ${languages.find(l => l.code === code)?.name}`, "success")
+  }
+
+  const refreshData = async () => {
+    if (!isOnline) {
+      showToast("Connexion internet requise", "error")
+      return
+    }
+    setIsRefreshing(true)
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    setIsRefreshing(false)
+    showToast("Données actualisées", "success")
   }
 
   useEffect(() => {
@@ -438,25 +552,46 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
   const currentLang = languages.find((l) => l.code === uiLanguage) || languages[0]
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card className="bg-gradient-to-r from-green-600 to-blue-700 text-white">
+    <div className="space-y-6 animate-fade-in">
+      {/* Header avec statut réseau */}
+      <Card className={`bg-gradient-to-r from-green-600 to-blue-700 text-white ${!isOnline ? "opacity-90" : ""}`}>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Languages className="h-6 w-6" />
                 <h2 className="text-2xl font-bold">{t.title}</h2>
+                {!isOnline && (
+                  <Badge className="bg-yellow-500 text-white text-xs gap-1 ml-2">
+                    <WifiOff className="h-3 w-3" />
+                    {t.offline}
+                  </Badge>
+                )}
               </div>
               <p className="text-green-100">
                 {t.subtitle} {languages.filter((l) => l.status === "available").length} {t.languages}
               </p>
             </div>
-            <div className="flex items-center gap-2 bg-white/20 rounded-lg px-4 py-2">
-              <Globe className="h-5 w-5" />
-              <div className="text-right">
-                <div className="text-2xl font-bold">{languages.length}</div>
-                <div className="text-xs text-green-100">{t.supportedLanguages}</div>
+            <div className="flex items-center gap-3">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="bg-white/20 hover:bg-white/30 text-white border-0"
+                onClick={refreshData}
+                disabled={isRefreshing}
+              >
+                {isRefreshing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+              <div className="flex items-center gap-2 bg-white/20 rounded-lg px-4 py-2">
+                <Globe className="h-5 w-5" />
+                <div className="text-right">
+                  <div className="text-2xl font-bold">{languages.length}</div>
+                  <div className="text-xs text-green-100">{t.supportedLanguages}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -527,7 +662,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                 {regions.map((region) => {
                   const Icon = region.icon
                   return (
-                    <SelectItem key={region.id} value={region.id} className="gap-2">
+                    <SelectItem key={region.id} value={region.id}>
                       <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4" />
                         <span>{region.name}</span>
@@ -582,7 +717,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                 className={`cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02] ${
                   language.code === uiLanguage ? "ring-2 ring-green-500 bg-green-50" : ""
                 }`}
-                onClick={() => onLanguageChange(language.code)}
+                onClick={() => handleLanguageChange(language.code)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
@@ -614,14 +749,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                       <span className="text-gray-500">📊 Complétude:</span>
                       <span className="font-medium">{language.completeness}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          language.completeness >= 90 ? "bg-green-500" : language.completeness >= 70 ? "bg-blue-500" : "bg-yellow-500"
-                        }`}
-                        style={{ width: `${language.completeness}%` }}
-                      />
-                    </div>
+                    <Progress value={language.completeness} className="h-2" />
                     <div className="flex items-center justify-between text-xs text-gray-400 pt-1">
                       <div className="flex items-center gap-1">
                         <Users className="h-3 w-3" />
@@ -656,9 +784,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                   <h4 className="font-medium">{t.autoDetection}</h4>
                   <p className="text-sm text-gray-500">{t.autoDetectionDesc}</p>
                 </div>
-                <Button variant="outline" size="sm" className="bg-green-50 text-green-600 border-green-200">
-                  {t.enabled}
-                </Button>
+                <Switch checked={autoDetection} onCheckedChange={setAutoDetection} />
               </div>
 
               <div className="flex items-center justify-between flex-wrap gap-3 p-3 border rounded-lg">
@@ -666,9 +792,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                   <h4 className="font-medium">{t.autoTranslation}</h4>
                   <p className="text-sm text-gray-500">{t.autoTranslationDesc}</p>
                 </div>
-                <Button variant="outline" size="sm" className="bg-green-50 text-green-600 border-green-200">
-                  {t.enabled}
-                </Button>
+                <Switch checked={autoTranslation} onCheckedChange={setAutoTranslation} />
               </div>
 
               <div className="flex items-center justify-between flex-wrap gap-3 p-3 border rounded-lg">
@@ -676,10 +800,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                   <h4 className="font-medium">{t.textToSpeech}</h4>
                   <p className="text-sm text-gray-500">{t.textToSpeechDesc}</p>
                 </div>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Volume2 className="h-4 w-4" />
-                  {t.configure}
-                </Button>
+                <Switch checked={textToSpeech} onCheckedChange={setTextToSpeech} />
               </div>
 
               <div className="flex items-center justify-between flex-wrap gap-3 p-3 border rounded-lg">
@@ -822,12 +943,7 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                       <span className="text-xl">{lang.flag}</span>
                       <span className="text-sm w-20">{lang.name}</span>
                       <div className="flex-1">
-                        <div className="h-2 bg-gray-200 rounded-full">
-                          <div
-                            className="h-2 rounded-full bg-green-500 transition-all"
-                            style={{ width: `${lang.completeness}%` }}
-                          />
-                        </div>
+                        <Progress value={lang.completeness} className="h-2" />
                       </div>
                       <span className="text-sm text-gray-500 w-12">{lang.completeness}%</span>
                     </div>
@@ -853,21 +969,48 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {languages
                   .filter((l) => l.status === "available" || l.status === "beta")
-                  .map((language) => (
-                    <div key={language.code} className="flex items-center justify-between p-3 border rounded-lg hover:shadow-md transition-all">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{language.flag}</span>
-                        <div>
-                          <p className="font-medium text-sm">{language.name}</p>
-                          <p className="text-xs text-gray-500">{language.fileSize}</p>
+                  .map((language) => {
+                    const isDownloaded = isLanguageDownloaded(language.code)
+                    const isDownloading = downloadingLang === language.code
+                    
+                    return (
+                      <div key={language.code} className="flex items-center justify-between p-3 border rounded-lg hover:shadow-md transition-all">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{language.flag}</span>
+                          <div>
+                            <p className="font-medium text-sm">{language.name}</p>
+                            <p className="text-xs text-gray-500">{language.fileSize}</p>
+                          </div>
                         </div>
+                        {isDownloaded ? (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="gap-1 text-red-600 hover:text-red-700"
+                            onClick={() => handleRemoveLanguage(language.code)}
+                          >
+                            <X className="h-3 w-3" />
+                            {t.remove}
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="gap-1"
+                            onClick={() => handleDownloadLanguage(language)}
+                            disabled={isDownloading || !isOnline}
+                          >
+                            {isDownloading ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Download className="h-3 w-3" />
+                            )}
+                            {isDownloading ? t.loading : t.download}
+                          </Button>
+                        )}
                       </div>
-                      <Button size="sm" variant="outline" className="gap-1">
-                        <Download className="h-3 w-3" />
-                        {t.download}
-                      </Button>
-                    </div>
-                  ))}
+                    )
+                  })}
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">
@@ -875,7 +1018,9 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                   <Smartphone className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-blue-800">{t.offlineInfo}</p>
-                    <p className="text-xs text-blue-600 mt-1">Espace total estimé : ~120 MB pour toutes les langues</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Téléchargés: {downloadedLanguages.length}/{languages.filter(l => l.status === "available" || l.status === "beta").length}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -885,7 +1030,9 @@ export default function LanguageManager({ currentLanguage, onLanguageChange }: L
                   <Zap className="h-5 w-5 text-green-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-green-800">Mode économique</p>
-                    <p className="text-xs text-green-600 mt-1">Téléchargez uniquement les langues que vous utilisez fréquemment pour économiser de l'espace</p>
+                    <p className="text-xs text-green-600 mt-1">
+                      Téléchargez uniquement les langues que vous utilisez fréquemment pour économiser de l'espace
+                    </p>
                   </div>
                 </div>
               </div>
